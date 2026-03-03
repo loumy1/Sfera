@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>sfera • Страница релиза</title>
+    <link rel="stylesheet" href="/styles.css?v=20260301-guest-uk1" />
+    <style>
+      .item-page-wrap {
+        display: grid;
+        gap: 0.9rem;
+      }
+
+      .item-page-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+
+      .item-page-head h2 {
+        margin: 0;
+      }
+
+      .item-page-links {
+        display: flex;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+      }
+
+      .item-page-grid {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 0.9rem;
+      }
+
+      .item-page-cover {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .item-page-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.45rem;
+        margin-top: 0.5rem;
+      }
+
+      .item-page-meta .meta-chip {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.45rem 0.55rem;
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .item-page-meta .meta-chip strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .item-page-audio {
+        margin-top: 0.75rem;
+        width: 100%;
+      }
+
+      .item-page-desc {
+        margin-top: 0.7rem;
+      }
+
+      .item-page-tracklist {
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .item-page-track-row {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0.7rem;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .item-page-track-row-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+
+      .item-page-track-row audio {
+        width: 100%;
+        margin-top: 0.45rem;
+      }
+
+      .item-page-license-list {
+        margin-top: 0.6rem;
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .item-page-license-chip {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.4rem 0.55rem;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .item-page-actions-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+
+      .item-page-action-btn.active {
+        border-color: rgba(196, 196, 196, 0.62);
+        background: rgba(196, 196, 196, 0.16);
+      }
+
+      .item-page-comments-wrap {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .item-page-comment-form {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .item-page-comment-form textarea {
+        width: 100%;
+        min-height: 84px;
+        resize: vertical;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--text);
+        padding: 0.7rem 0.75rem;
+        font: inherit;
+      }
+
+      .item-page-comment-form-actions {
+        display: flex;
+        gap: 0.45rem;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .item-page-comments-list {
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .item-page-comment {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 0.7rem;
+      }
+
+      .item-page-comment.reply {
+        margin-left: 1rem;
+        background: rgba(255, 255, 255, 0.015);
+      }
+
+      .item-page-comment-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .item-page-comment-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+
+      .item-page-comment-meta .user-link {
+        font-weight: 600;
+      }
+
+      .item-page-comment-author-like {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        color: #dfdfdf;
+        font-size: 0.78rem;
+      }
+
+      .item-page-comment-author-like img {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        object-fit: cover;
+      }
+
+      .item-page-comment-text {
+        margin: 0.45rem 0 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .item-page-comment-actions {
+        margin-top: 0.55rem;
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+      }
+
+      .item-page-replies {
+        margin-top: 0.65rem;
+        display: grid;
+        gap: 0.55rem;
+      }
+
+      @media (max-width: 760px) {
+        .item-page-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .item-page-comment.reply {
+          margin-left: 0.4rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand-wrap">
+          <h1><a class="brand-logo" href="/" data-brand="sfera">sfera</a></h1>
+          <p class="brand-beta">beta-test</p>
+        </div>
+        <div class="topbar-right">
+          <nav class="tabs-nav">
+            <a class="tab-btn" href="/">На главную</a>
+          </nav>
+        </div>
+      </div>
+      <div class="container">
+        <p id="itemPageStatus" class="global-status"></p>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="window">
+        <div id="itemPageRoot" class="item-page-wrap"></div>
+      </section>
+    </main>
+
+    <script src="/item-page.js?v=20260301-guest-uk1"></script>
+  </body>
+</html>

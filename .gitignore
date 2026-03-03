@@ -1,0 +1,15 @@
+node_modules/
+data/*.json
+uploads/*
+!uploads/.gitkeep
+!uploads/audio/
+!uploads/covers/
+!uploads/profiles/
+uploads/audio/*
+uploads/covers/*
+uploads/profiles/*
+!uploads/audio/.gitkeep
+!uploads/covers/.gitkeep
+!uploads/profiles/.gitkeep
+tmp/*
+!tmp/.gitkeep

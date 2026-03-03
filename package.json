@@ -1,0 +1,14 @@
+{
+  "name": "beatoon",
+  "version": "1.0.0",
+  "description": "beatoon — MVP музыкальной платформы в стиле SoundCloud",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "nodemailer": "^6.9.16"
+  },
+  "license": "MIT"
+}

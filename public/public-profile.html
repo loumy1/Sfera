@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>sfera • Профиль</title>
+    <link rel="stylesheet" href="/styles.css?v=20260301-guest-uk1" />
+  </head>
+  <body class="public-page">
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand-wrap">
+          <h1><a class="brand-logo" href="/#feed" data-brand="sfera">sfera</a></h1>
+          <p class="brand-beta">beta-test</p>
+        </div>
+        <div class="topbar-right">
+          <div id="onlineCounter" class="online-pill">Онлайн: 0</div>
+          <nav class="tabs-nav">
+            <a class="tab-btn" href="/">На главную</a>
+          </nav>
+        </div>
+      </div>
+      <div class="container">
+        <p id="publicStatus" class="global-status toast-status"></p>
+      </div>
+    </header>
+
+    <main class="container public-shell">
+      <section class="window window-profile">
+        <div id="publicProfileCard" class="hidden">
+          <div id="publicHeader" class="profile-header">
+            <img id="publicAvatar" class="profile-avatar" src="" alt="Аватар" />
+          </div>
+
+          <div class="profile-main profile-main-hero">
+            <div class="profile-identity">
+              <h2 id="publicUsername"></h2>
+              <p id="publicBio" class="muted"></p>
+              <p id="publicCreated" class="muted"></p>
+            </div>
+            <div id="publicProfileActions" class="track-actions profile-hero-actions"></div>
+          </div>
+
+          <div class="profile-toolbar">
+            <div class="profile-tabs" role="tablist" aria-label="Разделы профиля">
+              <button class="tab-btn public-profile-tab active" data-public-section="tracks" type="button">Треки</button>
+              <button class="tab-btn public-profile-tab" data-public-section="beats" type="button">Биты</button>
+              <button class="tab-btn public-profile-tab" data-public-section="reposts" type="button">Репосты</button>
+              <button class="tab-btn public-profile-tab" data-public-section="likes" type="button">Лайки</button>
+              <button class="tab-btn public-profile-tab" data-public-section="albums" type="button">Альбомы</button>
+              <button class="tab-btn public-profile-tab" data-public-section="playlists" type="button">Плейлисты</button>
+            </div>
+            <div class="profile-stats">
+              <div class="stat-box">
+                <span>Треки</span>
+                <strong id="publicTracksCount">0</strong>
+              </div>
+              <div class="stat-box">
+                <span>Репосты</span>
+                <strong id="publicRepostsCount">0</strong>
+              </div>
+              <div class="stat-box">
+                <span>Лайки</span>
+                <strong id="publicLikesCount">0</strong>
+              </div>
+              <div class="stat-box">
+                <span>Плейлисты</span>
+                <strong id="publicPlaylistsCount">0</strong>
+              </div>
+              <div class="stat-box">
+                <span>Подписчики</span>
+                <strong id="publicFollowersCount">0</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="publicNotFound" class="empty-state hidden">
+          <h2>Профиль не найден</h2>
+          <p>Проверь никнейм в адресе.</p>
+        </div>
+      </section>
+
+      <section class="window window-feed">
+        <div class="profile-panels">
+          <div class="card profile-panel active" data-public-panel="tracks">
+            <h3>Треки пользователя</h3>
+            <div id="publicTracksList" class="tracks-list"></div>
+          </div>
+
+          <div class="card profile-panel" data-public-panel="beats">
+            <h3>Биты пользователя</h3>
+            <div id="publicBeatsList" class="tracks-list"></div>
+          </div>
+
+          <div class="card profile-panel" data-public-panel="reposts">
+            <h3>Репосты пользователя</h3>
+            <div id="publicRepostsList" class="tracks-list"></div>
+          </div>
+
+          <div class="card profile-panel" data-public-panel="likes">
+            <h3>Лайки пользователя</h3>
+            <div id="publicLikesList" class="tracks-list"></div>
+          </div>
+
+          <div class="card profile-panel" data-public-panel="albums">
+            <h3>Альбомы пользователя</h3>
+            <div id="publicAlbumsList" class="playlist-list"></div>
+          </div>
+
+          <div class="card profile-panel" data-public-panel="playlists">
+            <h3>Плейлисты пользователя</h3>
+            <div id="publicPlaylistsList" class="playlist-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="publicMessagesModal" class="messages-modal hidden" data-modal-backdrop="1" aria-hidden="true">
+      <div class="messages-modal-dialog card" role="dialog" aria-modal="true" aria-labelledby="publicMessagesModalTitle">
+        <div class="messages-modal-head">
+          <div>
+            <h3 id="publicMessagesModalTitle">Диалог</h3>
+            <p id="publicMessagesModalSubtitle" class="muted">Личная переписка</p>
+          </div>
+          <button id="publicMessagesModalCloseBtn" class="ghost messages-modal-close" type="button" aria-label="Закрыть окно сообщений">✕</button>
+        </div>
+        <div id="publicMessagesModalChatList" class="chat-list messages-modal-chat-list"></div>
+        <form id="publicMessagesModalSendForm" class="message-form messages-modal-form">
+          <input id="publicMessagesModalInput" type="text" maxlength="2000" placeholder="Текст сообщения" required />
+          <button type="submit">Отправить</button>
+        </form>
+      </div>
+    </div>
+
+    <section id="globalPlayer" class="global-player hidden" aria-label="Музыкальный плеер">
+      <div class="global-player-inner">
+        <div class="player-cover-wrap">
+          <img id="playerTrackCover" class="player-track-cover" src="" alt="Обложка текущего трека" />
+        </div>
+        <div class="player-track-info">
+          <strong id="playerTrackTitle">Трек не выбран</strong>
+          <span id="playerTrackAuthors" class="muted">Авторы: -</span>
+          <span id="playerTrackMeta" class="muted">Нажми «Слушать» на любом треке</span>
+        </div>
+
+        <div class="player-controls">
+          <button id="playerPrevBtn" class="ghost" type="button" aria-label="Предыдущий трек">⏮</button>
+          <button id="playerPlayBtn" class="ghost" type="button" aria-label="Воспроизвести">▶</button>
+          <button id="playerPauseBtn" class="ghost" type="button" aria-label="Пауза">⏸</button>
+          <button id="playerStopBtn" class="ghost" type="button" aria-label="Остановить">⏹</button>
+          <button id="playerNextBtn" class="ghost" type="button" aria-label="Следующий трек">⏭</button>
+          <button id="playerShuffleBtn" class="ghost" type="button" aria-label="Перемешать">🔀</button>
+          <button id="playerRepeatAllBtn" class="ghost" type="button" aria-label="Повтор списка">🔁</button>
+          <button id="playerRepeatOneBtn" class="ghost" type="button" aria-label="Повтор одного трека">🔂</button>
+        </div>
+
+        <label class="player-volume">
+          <span>Громкость</span>
+          <input id="playerVolumeSlider" type="range" min="0" max="100" step="1" value="50" />
+        </label>
+
+        <div class="player-seek">
+          <span id="playerCurrentTime">0:00</span>
+          <input id="playerSeekSlider" type="range" min="0" max="1000" step="1" value="0" />
+          <span id="playerDuration">0:00</span>
+        </div>
+      </div>
+      <audio id="globalPlayerAudio" preload="metadata"></audio>
+    </section>
+
+    <script src="/public-profile.js?v=20260301-guest-uk1"></script>
+  </body>
+</html>
