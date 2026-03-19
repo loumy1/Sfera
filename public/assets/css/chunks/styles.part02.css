@@ -4797,6 +4797,9 @@ body.player-overlay-open {
 .player-queue-text > span {
   display: block;
   min-width: 0;
+}
+
+.player-queue-text > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4810,6 +4813,8 @@ body.player-overlay-open {
   min-width: 0;
   width: fit-content;
   max-width: 100%;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .player-queue-text .track-title-heading .track-title-text {
