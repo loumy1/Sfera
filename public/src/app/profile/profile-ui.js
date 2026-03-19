@@ -20,6 +20,227 @@
       renderAll
     } = deps;
     let profileSectionBindingsReady = false;
+    let profileInlineBindingsReady = false;
+
+    const PROFILE_AVATAR_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif"]);
+    const PROFILE_AVATAR_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif"]);
+    const PROFILE_HEADER_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg"]);
+    const PROFILE_HEADER_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg"]);
+    const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+    function createProfileTrackLink(track, { source = "profile", className = "track-title-link", text } = {}) {
+      const link = document.createElement("a");
+      const href = (track && typeof track.sharePath === "string" && track.sharePath)
+        ? track.sharePath
+        : buildTrackHref(track);
+      const tooltipText = t("trackExplicitTooltip");
+      link.className = className;
+      link.href = href;
+
+      const titleText = document.createElement("span");
+      titleText.className = "track-title-text";
+      titleText.textContent = text ?? String(track?.title || "");
+      link.appendChild(titleText);
+
+      if (track?.isExplicit) {
+        const explicitBadge = document.createElement("span");
+        explicitBadge.className = "track-explicit-badge";
+        explicitBadge.textContent = "E";
+        explicitBadge.setAttribute("aria-label", tooltipText);
+        explicitBadge.setAttribute("data-tooltip", tooltipText);
+        explicitBadge.tabIndex = 0;
+        link.appendChild(explicitBadge);
+      }
+
+      link.addEventListener("click", (event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+          return;
+        }
+        event.preventDefault();
+        window.location.assign(href);
+      });
+
+      return link;
+    }
+
+    function promptDialog(options) {
+      return window.SferaDialogs.prompt(options);
+    }
+
+    function getProfileImageInput(kind) {
+      if (kind === "avatar") {
+        return document.getElementById("profileAvatarFileInput");
+      }
+      if (kind === "header") {
+        return document.getElementById("profileHeaderFileInput");
+      }
+      return null;
+    }
+
+    function validateProfileImageFile(kind, file) {
+      if (!(file instanceof File)) {
+        throw new Error("Файл не выбран");
+      }
+
+      const mimeType = String(file.type || "").toLowerCase();
+      const fileNameLower = String(file.name || "").toLowerCase();
+      const dotIndex = fileNameLower.lastIndexOf(".");
+      const ext = dotIndex >= 0 ? fileNameLower.slice(dotIndex) : "";
+      const isAvatar = kind === "avatar";
+      const allowedMimeTypes = isAvatar ? PROFILE_AVATAR_IMAGE_MIME_TYPES : PROFILE_HEADER_IMAGE_MIME_TYPES;
+      const allowedExtensions = isAvatar ? PROFILE_AVATAR_IMAGE_EXTENSIONS : PROFILE_HEADER_IMAGE_EXTENSIONS;
+      const hasValidMime = allowedMimeTypes.has(mimeType);
+      const hasValidExt = allowedExtensions.has(ext);
+
+      if (!hasValidMime && !hasValidExt) {
+        throw new Error(isAvatar ? "Для аватара допускаются PNG, JPG или GIF" : "Для шапки допускаются только PNG или JPG");
+      }
+
+      if (Number(file.size || 0) > PROFILE_IMAGE_MAX_BYTES) {
+        throw new Error("Изображение больше 5 МБ");
+      }
+
+      return file;
+    }
+
+    async function uploadProfileImage(kind, file) {
+      const validatedFile = validateProfileImageFile(kind, file);
+      const formData = new FormData();
+      const fallbackExtension = kind === "avatar" && String(validatedFile.type || "").toLowerCase() === "image/gif" ? ".gif" : ".jpg";
+      formData.append(kind, validatedFile, validatedFile.name || `${kind}${fallbackExtension}`);
+
+      const isAvatar = kind === "avatar";
+      try {
+        setStatus(isAvatar ? "Загружаю аватар..." : "Загружаю шапку...");
+        await api("/api/profile", {
+          method: "PUT",
+          body: formData
+        });
+        await refreshMe();
+        renderAll();
+        setStatus(isAvatar ? "Аватар обновлен" : "Шапка обновлена", "success");
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    }
+
+    function openProfileImagePicker(kind) {
+      if (!state.user) {
+        return;
+      }
+      const input = getProfileImageInput(kind);
+      if (!input) {
+        return;
+      }
+      input.value = "";
+      input.click();
+    }
+
+    function setProfileEditableHints(isEditable) {
+      if (elements.profileHeader) {
+        elements.profileHeader.classList.toggle("is-editable", isEditable);
+        elements.profileHeader.setAttribute("role", "button");
+        elements.profileHeader.tabIndex = isEditable ? 0 : -1;
+        elements.profileHeader.title = isEditable ? t("profileHeaderUpdateBtn") : "";
+      }
+
+      if (elements.profileAvatar) {
+        elements.profileAvatar.classList.toggle("is-editable", isEditable);
+        elements.profileAvatar.tabIndex = isEditable ? 0 : -1;
+        elements.profileAvatar.title = isEditable ? t("profileAvatarUpdateBtn") : "";
+      }
+    }
+
+    function ensureProfileInlineBindings() {
+      if (profileInlineBindingsReady) {
+        return;
+      }
+      profileInlineBindingsReady = true;
+
+      elements.profileBio?.addEventListener("click", async () => {
+        if (!state.user) {
+          return;
+        }
+        const currentBio = state.user.bio || "";
+        const newBio = await promptDialog({
+          title: "Редактировать описание профиля",
+          value: currentBio,
+          placeholder: "Расскажи о себе",
+          multiline: true,
+          confirmText: "Сохранить"
+        });
+        if (newBio === null) {
+          return;
+        }
+        const trimmedBio = newBio.trim().slice(0, 500);
+        if (trimmedBio === currentBio) {
+          return;
+        }
+        updateProfileBio(trimmedBio);
+      });
+
+      elements.profileHeader?.addEventListener("click", (event) => {
+        if (!state.user) {
+          return;
+        }
+        if (event.target && event.target.closest("#profileAvatar")) {
+          return;
+        }
+        openProfileImagePicker("header");
+      });
+
+      elements.profileHeader?.addEventListener("keydown", (event) => {
+        if (!state.user) {
+          return;
+        }
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        openProfileImagePicker("header");
+      });
+
+      elements.profileAvatar?.addEventListener("click", (event) => {
+        if (!state.user) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        openProfileImagePicker("avatar");
+      });
+
+      elements.profileAvatar?.addEventListener("keydown", (event) => {
+        if (!state.user) {
+          return;
+        }
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        openProfileImagePicker("avatar");
+      });
+
+      const avatarInput = getProfileImageInput("avatar");
+      avatarInput?.addEventListener("change", async () => {
+        const file = avatarInput.files?.[0];
+        if (!file) {
+          return;
+        }
+        await uploadProfileImage("avatar", file);
+        avatarInput.value = "";
+      });
+
+      const headerInput = getProfileImageInput("header");
+      headerInput?.addEventListener("change", async () => {
+        const file = headerInput.files?.[0];
+        if (!file) {
+          return;
+        }
+        await uploadProfileImage("header", file);
+        headerInput.value = "";
+      });
+    }
 
     async function updateProfileBio(bio) {
       try {
@@ -151,10 +372,11 @@
         typeChip.className = "track-privacy-chip";
         typeChip.textContent = t("profileTabTracks");
 
-        const title = document.createElement("a");
-        title.className = "track-title-link";
-        title.href = href;
-        title.textContent = track.title || t("trackFallbackTitle");
+        const title = createProfileTrackLink(track, {
+          source: "profile-pinned",
+          className: "track-title-link",
+          text: track.title || t("trackFallbackTitle")
+        });
 
         const meta = document.createElement("p");
         meta.className = "muted";
@@ -182,25 +404,41 @@
 
     function renderProfile() {
       ensureProfileSectionBindings();
+      ensureProfileInlineBindings();
       if (!state.user) {
+        setProfileEditableHints(false);
         applyProfileSectionVisibility();
         return;
       }
 
-      elements.profileUsername.textContent = `@${state.user.username}`;
+      elements.profileUsername.textContent = "";
+      const usernameText = document.createElement("span");
+      usernameText.textContent = `@${state.user.username}`;
+      elements.profileUsername.appendChild(usernameText);
+      if (state.user.isVerifiedArtist) {
+        const verifiedBadge = document.createElement("span");
+        verifiedBadge.className = "profile-role-badge is-verified";
+        verifiedBadge.textContent = "✓";
+        const verifiedTooltip = t("verifiedArtistTooltip");
+        verifiedBadge.setAttribute("aria-label", verifiedTooltip);
+        verifiedBadge.setAttribute("data-tooltip", verifiedTooltip);
+        verifiedBadge.tabIndex = 0;
+        elements.profileUsername.appendChild(verifiedBadge);
+      }
+      if (state.user.isAdmin) {
+        const adminBadge = document.createElement("span");
+        adminBadge.className = "profile-role-badge";
+        adminBadge.textContent = "ADMIN";
+        adminBadge.title = state.user.adminGrantedAt
+          ? `Режим администратора активирован ${formatDate(state.user.adminGrantedAt)}`
+          : "Режим администратора активирован";
+        elements.profileUsername.appendChild(adminBadge);
+      }
       elements.profileBio.textContent = state.user.bio || "Описание профиля не заполнено";
       elements.profileBio.style.cursor = "pointer";
       elements.profileBio.title = "Нажми, чтобы редактировать";
-      elements.profileBio.addEventListener("click", () => {
-        if (!state.user) return;
-        const currentBio = state.user.bio || "";
-        const newBio = window.prompt("Редактировать описание профиля:", currentBio);
-        if (newBio === null) return;
-        const trimmedBio = newBio.trim().slice(0, 500);
-        if (trimmedBio === currentBio) return;
-        updateProfileBio(trimmedBio);
-      });
       elements.profileCreated.textContent = `${t("profileCreatedPrefix")} ${formatDateOnly(state.user.createdAt)}`;
+      setProfileEditableHints(true);
 
       if (state.user.headerUrl) {
         elements.profileHeader.style.backgroundImage = `linear-gradient(to top, rgba(4,11,14,0.5), transparent), url(${state.user.headerUrl})`;
@@ -213,13 +451,23 @@
 
       setImageWithFallback(elements.profileAvatar, state.user.avatarUrl);
 
-      const myContentTracks = state.tracks.filter((track) => track.userId === state.user.id);
+      const normalizedCurrentUsername = String(state.user.username || "").trim().toLowerCase();
+      const isOwnedByCurrentUser = (entry) => {
+        if (!entry || !state.user) return false;
+        if (entry.userId && state.user.id && entry.userId === state.user.id) {
+          return true;
+        }
+        const normalizedEntryUsername = String(entry.username || "").trim().toLowerCase();
+        return Boolean(normalizedCurrentUsername && normalizedEntryUsername === normalizedCurrentUsername);
+      };
+
+      const myContentTracks = state.tracks.filter((track) => isOwnedByCurrentUser(track));
       const mySongTracks = myContentTracks.filter((track) => !isBeatTrack(track));
       const myBeatTracks = myContentTracks.filter(isBeatTrack);
       const repostSet = new Set(state.user.reposts || []);
       const repostTracks = state.tracks.filter((track) => repostSet.has(track.id));
       const likedTracks = state.tracks.filter((track) => track.liked);
-      const myAlbums = state.albums.filter((album) => album.userId === state.user.id);
+      const myAlbums = state.albums.filter((album) => isOwnedByCurrentUser(album));
 
       renderPinnedRelease(mySongTracks);
       renderTracksList(elements.profileTracksList, mySongTracks, "profile-tracks");

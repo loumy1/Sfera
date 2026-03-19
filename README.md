@@ -1,197 +1,111 @@
-# beatoon
+# Sfera
 
-`beatoon` — локальный MVP музыкальной платформы в стиле SoundCloud.
+> Cinematic independent music platform for tracks, beats, albums, profiles, moderation, and live lyrics.
 
-## Реализовано
-- регистрация и вход;
-- проверка уникальности никнейма при регистрации (`Этот никнейм уже занят, выберите другой`);
-- никнейм нельзя изменить после регистрации;
+## What Sfera includes
 
-- верхние разделы сайта:
-  - `Профиль`
-  - `Опубликовать трек`
-  - `Лента`
-  - `Настройки`
+- artist profiles with avatars, headers, verification badges, public profile pages, and social stats
+- publishing for tracks, beats, and albums
+- GIF covers and GIF avatars
+- comments, likes, dislikes, reposts, playlists, follows, and direct messages
+- fullscreen player with queue, lyrics mode, karaoke-style sync, shuffle history, and responsive controls
+- live track lyrics with support for plain text, synced lines, and karaoke progression
+- admin tools for moderation, support inbox, profile management, storage cleanup, reports, and account actions
+- public release pages and public user pages
+- custom UI layer, custom dialogs, custom icon system, animated branding, and intro sequence
 
-- публикация трека с полями:
-  - название,
-  - описание,
-  - жанр,
-  - авторы,
-  - продюсеры (битмейкеры),
-  - хештеги (до 5),
-  - обложка,
-  - аудиофайл;
+## Stack
 
-- ограничение аудио: **только MP3 или WAV**;
-- лимиты аудио:
-  - MP3 до 15 МБ,
-  - WAV до 30 МБ;
-- WAV автоматически конвертируется сервером в MP3 (битрейт по умолчанию `128k`);
-- ограничение обложки: **только PNG/JPG**;
-- обложка автоматически приводится на фронтенде к квадрату `500x500`;
+- Node.js
+- Vanilla JavaScript
+- HTML + CSS
+- `busboy` for multipart uploads
+- `nodemailer` for mail flows
+- JSON file storage for app data
+- optional `ffmpeg` for server-side audio processing
+- optional `nginx` + `pm2` for production hosting
 
-- реакции на треки:
-  - лайки,
-  - дизлайки,
-  - репост;
+## Local Start
 
-- комментарии:
-  - публичные комментарии,
-  - публичные лайки/дизлайки комментариев,
-  - ответы на комментарии,
-  - бейдж `❤ от автора` на комментарии, которые лайкнул автор трека;
+Requirements:
 
-- плейлисты:
-  - создание,
-  - редактирование,
-  - удаление,
-  - добавление/удаление любых треков (своих и чужих);
+- Node.js 18+
 
-- альбомы:
-  - публикация альбомов во вкладке `Опубликовать трек`,
-  - добавление в альбом своих треков,
-  - обложка альбома (опционально);
-
-- социальные функции:
-  - подписки на пользователей,
-  - личные сообщения и список последних диалогов,
-  - личка только текстом (без фото/видео/аудио),
-  - realtime-уведомления через WebSocket для лички и подписок;
-
-- публичные профили:
-  - отдельные страницы профилей пользователей по URL `/u/:username`,
-  - публичный просмотр треков и плейлистов пользователя;
-
-- профиль:
-  - аватар,
-  - шапка,
-  - описание профиля,
-  - просмотр своих треков и репостов;
-
-- редактирование своего трека после публикации:
-  - название,
-  - описание,
-  - жанр,
-  - авторы,
-  - продюсеры,
-  - хештеги,
-  - обложка,
-  - аудиофайл.
-
-## Технологии
-- Node.js + `busboy` (multipart-стриминг загрузок)
-- JSON-файлы как простая база
-- HTML/CSS/Vanilla JS
-
-## Запуск
-1. Убедись, что установлен Node.js 18+.
-2. В корне проекта выполни:
+Install and run:
 
 ```bash
 npm install
 npm start
 ```
 
-3. Открой в браузере: [http://localhost:3000](http://localhost:3000)
+Open:
 
-## Как сделать сайт публичным (Render)
-1. Создай репозиторий на GitHub и загрузи туда проект.
-2. Зарегистрируйся на Render и создай `Web Service` из этого репозитория.
-3. Укажи команды:
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-4. После деплоя получишь публичный URL вида `https://<service>.onrender.com`.
-5. Для своего домена добавь `Custom Domain` в настройках сервиса.
+- [http://localhost:3000](http://localhost:3000)
 
-Важно:
-- для корректного сохранения `data/` и `uploads/` между перезапусками нужен `Persistent Disk` (на Render это платная опция);
-- без диска файлы и JSON-данные будут временными (эпhemeral filesystem).
-- для WAV->MP3 конвертации на сервере нужен `ffmpeg`.
+## Production
 
-## Оптимизации под слабый VPS
-В проекте уже включены три оптимизации:
+Recommended layout:
 
-1. `multipart`-стриминг загрузок:
-   - сервер принимает аудио/обложку как `multipart/form-data`;
-   - файлы не держатся целиком в памяти как base64, а пишутся во временные файлы (`tmp/`) потоком.
-2. Очередь `ffmpeg`:
-   - конвертация WAV->MP3 идет через очередь по одному заданию;
-   - защищает слабый сервер от нескольких параллельных тяжелых конвертаций.
-3. `nginx` для статики и `/uploads`:
-   - Node.js обслуживает только API/WebSocket и динамические маршруты;
-   - статика и медиа отдаются напрямую nginx.
+- app: `/opt/beatoon`
+- persistent storage: `/var/lib/beatoon`
 
-## Публикация на своем VPS (Ubuntu + nginx)
-Рекомендуемая схема путей:
-- код: `/opt/beatoon`
-- постоянные данные: `/var/lib/beatoon` (`data/`, `uploads/`, `tmp/`)
-
-1. Скопируй проект на сервер в `/opt/beatoon`.
-2. Установи зависимости:
-
-```bash
-cd /opt/beatoon
-npm install
-```
-
-3. Установи ffmpeg:
-
-```bash
-sudo apt update
-sudo apt install -y ffmpeg
-```
-
-4. Запускай Node.js с переменными окружения:
+Run app:
 
 ```bash
 HOST=127.0.0.1 PORT=3000 STORAGE_DIR=/var/lib/beatoon npm start
 ```
 
-5. Подключи nginx-конфиг:
+If you use PM2:
 
 ```bash
-sudo cp /opt/beatoon/deploy/nginx/beatoon.conf /etc/nginx/sites-available/beatoon.conf
-sudo ln -s /etc/nginx/sites-available/beatoon.conf /etc/nginx/sites-enabled/beatoon.conf
-sudo nginx -t
-sudo systemctl reload nginx
+pm2 start ecosystem.config.js
+pm2 save
 ```
 
-Готовый конфиг лежит в файле: `deploy/nginx/beatoon.conf`.
+`nginx` config example is included in:
 
-Если после деплоя не грузятся аватары/обложки/аудио:
-- обязательно обнови nginx-конфиг из `deploy/nginx/beatoon.conf`;
-- выполни `sudo nginx -t && sudo systemctl reload nginx`.
+- [`deploy/nginx/beatoon.conf`](deploy/nginx/beatoon.conf)
 
-## Конвертация WAV -> MP3
-Сервер использует `ffmpeg` для автоконвертации WAV в MP3 при загрузке/обновлении трека.
+## Storage model
 
-Установка на Ubuntu:
+This project stores app data in JSON files and media files on disk.
 
-```bash
-sudo apt update
-sudo apt install -y ffmpeg
-ffmpeg -version
-```
+- `data/` stores users, tracks, albums, playlists, sessions, messages, notifications, and other app data
+- `uploads/` stores audio, covers, profile media, and related assets
+- `tmp/` stores temporary upload and processing files
 
-Переменные окружения:
-- `AUTO_CONVERT_WAV_TO_MP3=true|false` (по умолчанию `true`)
-- `TARGET_MP3_BITRATE=128k` (по умолчанию `128k`)
-- `MAX_MP3_UPLOAD_SIZE_MB=15`
-- `MAX_WAV_UPLOAD_SIZE_MB=30`
-- `MAX_STORED_AUDIO_SIZE_MB=15`
+These folders are intentionally ignored in git where needed, because they contain runtime state and user content.
 
-## Структура
-- `server.js` — API + статика
-- `public/` — интерфейс (`index.html` + `public-profile.html`)
-- `data/` — JSON-данные
-- `uploads/audio/` — MP3/WAV
-- `uploads/covers/` — обложки треков
-- `uploads/profiles/` — аватары и шапки профилей
-- `tmp/` — временные файлы для multipart и ffmpeg
-- `deploy/nginx/beatoon.conf` — пример production-конфига nginx
+## Project structure
 
-## Ограничения MVP
-- одноэкземплярный локальный сервер;
-- файловое хранилище вместо SQL-базы;
-- нет горизонтального масштабирования websocket-сессий (один процесс).
+- [`server.js`](server.js) — server entry point
+- [`src/server/chunks`](src/server/chunks) — backend split into server chunks
+- [`public/index.html`](public/index.html) — main app shell
+- [`public/item-page.html`](public/item-page.html) — release page
+- [`public/public-profile.html`](public/public-profile.html) — public profile page
+- [`public/src/app`](public/src/app) — frontend modules
+- [`public/src/app/player/player-core.js`](public/src/app/player/player-core.js) — global player logic
+- [`public/src/app/settings/settings-ui.js`](public/src/app/settings/settings-ui.js) — settings, support, admin center
+
+## Notes
+
+- `ffmpeg` is useful for heavier audio workflows
+- persistent disk is important in production, otherwise runtime data will be temporary
+- if you deploy behind `nginx`, keep static files and `/uploads` served efficiently from the proxy layer
+
+## Status
+
+Sfera is an actively evolving custom music web app. The codebase already includes:
+
+- publishing flows
+- admin center
+- reports system
+- support inbox
+- verification badges
+- explicit content `E` marker
+- fullscreen player and synced lyrics
+- public profiles and public release pages
+
+## License
+
+MIT

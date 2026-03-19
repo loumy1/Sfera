@@ -630,6 +630,7 @@ function getNotificationUiText(key) {
       emptyFiltered: "Нет уведомлений по выбранному фильтру",
       open: "Открыть",
       openDialog: "Диалог",
+      openSupport: "Поддержка",
       nowRead: "Уведомления отмечены как прочитанные",
       justNow: "только что"
     },
@@ -646,6 +647,7 @@ function getNotificationUiText(key) {
       emptyFiltered: "No notifications for this filter",
       open: "Open",
       openDialog: "Dialog",
+      openSupport: "Support",
       nowRead: "Notifications marked as read",
       justNow: "just now"
     },
@@ -662,6 +664,7 @@ function getNotificationUiText(key) {
       emptyFiltered: "该筛选下暂无通知",
       open: "打开",
       openDialog: "对话",
+      openSupport: "支持",
       nowRead: "通知已标记为已读",
       justNow: "刚刚"
     }
@@ -671,17 +674,23 @@ function getNotificationUiText(key) {
 
 function getNotificationFilterKey(notification) {
   const type = String(notification?.type || "");
-  if (type === "message_new") {
+  if (
+    type === "message_new" ||
+    type === "support_reply" ||
+    (type === "mention" && (notification?.action === "support" || notification?.action === "message"))
+  ) {
     return "messages";
   }
   if (type === "follow_new") {
     return "follows";
   }
   if (
+    type === "comment_new" ||
+    type === "comment_reply" ||
     type === "track_comment" ||
     type === "track_comment_reply" ||
-    type === "comment_reply" ||
-    type === "comment_reaction"
+    type === "comment_reaction" ||
+    (type === "mention" && (!notification?.action || notification?.action === "comment"))
   ) {
     return "comments";
   }
@@ -698,43 +707,64 @@ function formatNotificationPrimaryText(notification) {
   const lang = normalizeUiLanguage(state.uiLanguage, DEFAULT_UI_LANGUAGE);
   const actor = notification?.actorUsername ? `@${notification.actorUsername}` : "@user";
   const trackTitle = notification?.trackTitle ? `«${notification.trackTitle}»` : (lang === "en" ? "your release" : lang === "zh" ? "你的作品" : "твой релиз");
+  const playlistTitle = notification?.messagePreview
+    ? `«${notification.messagePreview}»`
+    : (lang === "en" ? "your collection" : lang === "zh" ? "你的歌单" : "твою подборку");
 
   const map = {
     ru: {
       message_new: `${actor} отправил сообщение`,
+      support_reply: `${actor} ответил в поддержке`,
       follow_new: `${actor} подписался на тебя`,
       track_reaction_like: `${actor} лайкнул ${trackTitle}`,
       track_reaction_dislike: `${actor} дизлайкнул ${trackTitle}`,
+      track_like: `${actor} лайкнул ${trackTitle}`,
+      track_dislike: `${actor} дизлайкнул ${trackTitle}`,
       track_repost: `${actor} сделал репост ${trackTitle}`,
+      playlist_add: `${actor} добавил ${trackTitle} в подборку ${playlistTitle}`,
       track_comment: `${actor} оставил комментарий к ${trackTitle}`,
       track_comment_reply: `${actor} ответил в комментариях к ${trackTitle}`,
+      comment_new: `${actor} оставил комментарий к ${trackTitle}`,
       comment_reply: `${actor} ответил на твой комментарий`,
+      mention_comment: `${actor} упомянул тебя в комментариях к ${trackTitle}`,
       comment_reaction_like: `${actor} лайкнул твой комментарий`,
       comment_reaction_dislike: `${actor} дизлайкнул твой комментарий`,
       generic: "Новое уведомление"
     },
     en: {
       message_new: `${actor} sent a message`,
+      support_reply: `${actor} replied in support`,
       follow_new: `${actor} followed you`,
       track_reaction_like: `${actor} liked ${trackTitle}`,
       track_reaction_dislike: `${actor} disliked ${trackTitle}`,
+      track_like: `${actor} liked ${trackTitle}`,
+      track_dislike: `${actor} disliked ${trackTitle}`,
       track_repost: `${actor} reposted ${trackTitle}`,
+      playlist_add: `${actor} added ${trackTitle} to ${playlistTitle}`,
       track_comment: `${actor} commented on ${trackTitle}`,
       track_comment_reply: `${actor} replied in comments on ${trackTitle}`,
+      comment_new: `${actor} commented on ${trackTitle}`,
       comment_reply: `${actor} replied to your comment`,
+      mention_comment: `${actor} mentioned you in comments on ${trackTitle}`,
       comment_reaction_like: `${actor} liked your comment`,
       comment_reaction_dislike: `${actor} disliked your comment`,
       generic: "New notification"
     },
     zh: {
       message_new: `${actor} 给你发了消息`,
+      support_reply: `${actor} 在支持中回复了你`,
       follow_new: `${actor} 关注了你`,
       track_reaction_like: `${actor} 点赞了${trackTitle}`,
       track_reaction_dislike: `${actor} 点踩了${trackTitle}`,
+      track_like: `${actor} 点赞了${trackTitle}`,
+      track_dislike: `${actor} 点踩了${trackTitle}`,
       track_repost: `${actor} 转发了${trackTitle}`,
+      playlist_add: `${actor} 把${trackTitle}加入了${playlistTitle}`,
       track_comment: `${actor} 评论了${trackTitle}`,
       track_comment_reply: `${actor} 回复了${trackTitle}下的评论`,
+      comment_new: `${actor} 评论了${trackTitle}`,
       comment_reply: `${actor} 回复了你的评论`,
+      mention_comment: `${actor} 在${trackTitle}的评论中提到了你`,
       comment_reaction_like: `${actor} 点赞了你的评论`,
       comment_reaction_dislike: `${actor} 点踩了你的评论`,
       generic: "新通知"
@@ -749,10 +779,18 @@ function formatNotificationPrimaryText(notification) {
 function getNotificationIcon(notification) {
   const type = String(notification?.type || "");
   if (type === "message_new") return "✉️";
+  if (type === "support_reply") return "🛟";
   if (type === "follow_new") return "👤";
   if (type === "track_repost") return "🔁";
-  if (type === "track_comment" || type === "track_comment_reply" || type === "comment_reply") return "💬";
-  if (type === "track_reaction" || type === "comment_reaction") {
+  if (type === "playlist_add") return "📁";
+  if (type === "comment_new" || type === "comment_reply" || type === "track_comment" || type === "track_comment_reply") return "💬";
+  if (type === "mention") return "@";
+  if (type === "track_like") return "👍";
+  if (type === "track_dislike") return "👎";
+  if (type === "track_reaction") {
+    return notification?.action === "dislike" ? "👎" : "👍";
+  }
+  if (type === "comment_reaction") {
     return notification?.action === "dislike" ? "👎" : "👍";
   }
   return "🔔";
@@ -855,7 +893,7 @@ function renderNotifications() {
     body.append(title, meta);
 
     const preview = String(notification.messagePreview || notification.commentPreview || "").trim();
-    if (preview) {
+    if (preview && notification.type !== "playlist_add") {
       const previewNode = document.createElement("p");
       previewNode.className = "notification-item-preview";
       previewNode.textContent = preview;
@@ -870,7 +908,9 @@ function renderNotifications() {
     openBtn.className = "ghost notification-item-open";
     openBtn.textContent = notification.type === "message_new"
       ? getNotificationUiText("openDialog")
-      : getNotificationUiText("open");
+      : notification.type === "support_reply"
+        ? getNotificationUiText("openSupport")
+        : getNotificationUiText("open");
     openBtn.addEventListener("click", async () => {
       if (notification.type === "message_new" && notification.peerUserId && window.SferaMessagesModal) {
         try {
@@ -883,8 +923,27 @@ function renderNotifications() {
           return;
         }
       }
+      if (notification.type === "support_reply" && typeof __sferaSettingsUi.openSupportWorkspace === "function") {
+        try {
+          state.notificationsModalOpen = false;
+          renderNotifications();
+          await __sferaSettingsUi.openSupportWorkspace();
+          return;
+        } catch (error) {
+          setStatus(error.message || String(error || "Ошибка"), "error");
+          return;
+        }
+      }
       if (notification.href) {
-        window.location.href = notification.href;
+        const href = String(notification.href || "").trim();
+        if (!href) {
+          return;
+        }
+        if (notification.type === "follow_new" || href.startsWith("/public-profile.html") || href.startsWith("/u/")) {
+          window.open(href, "_blank", "noopener,noreferrer");
+          return;
+        }
+        window.location.href = href;
       }
     });
     actions.appendChild(openBtn);
@@ -1272,6 +1331,7 @@ function renderAll() {
   renderSettings();
   renderNotifications();
   renderAuthGate();
+  renderExpandedPlayerContent();
   updateTrackPlayButtons();
   updateGlobalPlayerButtons();
   updateSeekUi();

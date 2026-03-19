@@ -24,16 +24,67 @@
       collectBeatLicensesFromForm,
       renderAlbumTrackOptions,
       setAlbumTrackPickerFilterMode,
-      updatePremiereFieldVisibility
+      updatePremiereFieldVisibility,
+      resetTrackLyricsSyncComposer
     } = deps;
 
     let publishHandlersBound = false;
+    let publishModeSwitchersBound = false;
+
+    function bindPublishModeSwitchers() {
+      if (publishModeSwitchersBound) {
+        return;
+      }
+      publishModeSwitchersBound = true;
+
+      const publishShell = document.getElementById("publishShell");
+      const publishHeroTitle = document.getElementById("publishHeroTitle");
+      const publishHeroText = document.getElementById("publishHeroText");
+      const publishModeButtons = Array.from(document.querySelectorAll("[data-publish-switch]"));
+
+      if (!publishShell || publishModeButtons.length === 0) {
+        return;
+      }
+
+      const setPublishView = (nextMode) => {
+        const mode = publishModeButtons.some((button) => button.dataset.publishSwitch === nextMode)
+          ? nextMode
+          : "track";
+        publishShell.dataset.publishView = mode;
+
+        let activeButton = publishModeButtons[0] || null;
+        publishModeButtons.forEach((button) => {
+          const isActive = button.dataset.publishSwitch === mode;
+          button.classList.toggle("active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+          if (isActive) {
+            activeButton = button;
+          }
+        });
+
+        if (publishHeroTitle && activeButton?.dataset.publishHeroTitle) {
+          publishHeroTitle.textContent = activeButton.dataset.publishHeroTitle;
+        }
+        if (publishHeroText && activeButton?.dataset.publishHeroText) {
+          publishHeroText.textContent = activeButton.dataset.publishHeroText;
+        }
+      };
+
+      publishModeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          setPublishView(button.dataset.publishSwitch || "track");
+        });
+      });
+
+      setPublishView(publishShell.dataset.publishView || "track");
+    }
 
     function bindPublishUiHandlers() {
       if (publishHandlersBound) {
         return;
       }
       publishHandlersBound = true;
+      bindPublishModeSwitchers();
 
       elements.uploadForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -53,6 +104,9 @@
           const authors = parseCommaList(elements.trackAuthors.value, 10);
           const producers = parseCommaList(elements.trackProducers.value, 10);
           const hashtags = parseCommaList(elements.trackHashtags.value, 5, normalizeTag);
+          const isExplicit = Boolean(elements.trackExplicit?.checked);
+          const lyricsPlain = String(document.getElementById("trackLyricsPlain")?.value || "").trim();
+          const lyricsSyncText = String(document.getElementById("trackLyricsSyncText")?.value || "").trim();
 
           const audioFile = elements.trackFile.files?.[0];
           const coverFile = elements.trackCover.files?.[0];
@@ -71,9 +125,16 @@
           requestData.append("genre", genre);
           requestData.append("publishMode", publishMode);
           requestData.append("premiereAt", premiereAtIso || "");
+          requestData.append("isExplicit", isExplicit ? "true" : "false");
           requestData.append("authors", authors.join(", "));
           requestData.append("producers", producers.join(", "));
           requestData.append("hashtags", hashtags.join(", "));
+          if (lyricsPlain) {
+            requestData.append("lyricsPlain", lyricsPlain);
+          }
+          if (lyricsSyncText) {
+            requestData.append("lyricsSyncText", lyricsSyncText);
+          }
           if (Number.isFinite(audio.durationSec) && audio.durationSec > 0) {
             requestData.append("durationSec", String(audio.durationSec));
           }
@@ -87,6 +148,14 @@
           });
 
           elements.uploadForm.reset();
+          const trackLyricsSyncDetails = document.getElementById("trackLyricsSyncDetails");
+          if (trackLyricsSyncDetails) {
+            trackLyricsSyncDetails.open = false;
+          }
+          if (typeof resetTrackLyricsSyncComposer === "function") {
+            resetTrackLyricsSyncComposer({ clearGeneratedValue: true, preserveAudio: false });
+          }
+          updatePremiereFieldVisibility();
           await refreshTracks();
           await refreshAlbums();
           await refreshPlaylists();
@@ -110,8 +179,8 @@
           const title = elements.albumTitle.value.trim();
           const description = elements.albumDescription.value.trim();
           const genre = elements.albumGenre.value.trim();
-          const authors = parseCommaList(elements.albumAuthors.value, 10);
-          const producers = parseCommaList(elements.albumProducers.value, 10);
+          const authors = parseCommaList(elements.albumAuthors.value, 100);
+          const producers = parseCommaList(elements.albumProducers.value, 100);
           const hashtags = parseCommaList(elements.albumHashtags.value, 5, normalizeTag);
           const selectedTrackIds = getAlbumTrackPickerSelectedIds();
           const localAlbumFiles = getAlbumLocalFiles();
@@ -176,6 +245,8 @@
             }
           }
 
+          const albumTrackIds = Array.from(new Set([...selectedTrackIds, ...uploadedTrackIds].filter(Boolean)));
+
           const requestData = new FormData();
           requestData.append("title", title);
           requestData.append("description", description);
@@ -183,13 +254,13 @@
           requestData.append("authors", authors.join(", "));
           requestData.append("producers", producers.join(", "));
           requestData.append("hashtags", hashtags.join(", "));
-          requestData.append("trackIds", [...selectedTrackIds, ...uploadedTrackIds].join(", "));
+          requestData.append("trackIds", albumTrackIds.join(", "));
 
           if (preparedAlbumCover) {
             requestData.append("cover", preparedAlbumCover.file, preparedAlbumCover.fileName);
           }
 
-          setStatus("Публикую альбом...");
+          setStatus(`Публикую альбом (${albumTrackIds.length} треков)...`);
           await api("/api/albums", {
             method: "POST",
             body: requestData

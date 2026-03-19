@@ -4,6 +4,9 @@ function requireAuth(currentUser) {
   if (!currentUser) {
     throw new HttpError(401, "Нужно войти в аккаунт");
   }
+  if (currentUser.isBanned) {
+    throw new HttpError(403, "Аккаунт заблокирован");
+  }
 }
 
 function requireAdmin(currentUser) {
@@ -138,6 +141,30 @@ async function serveFile(req, res, filePath, contentType) {
   fs.createReadStream(filePath).pipe(res);
 }
 
+function sendMissingUploadImagePlaceholder(res) {
+  const svg = [
+    "<svg xmlns='http://www.w3.org/2000/svg' width='640' height='640' viewBox='0 0 640 640'>",
+    "<defs>",
+    "<linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>",
+    "<stop offset='0%' stop-color='#161616'/>",
+    "<stop offset='100%' stop-color='#2b2b2b'/>",
+    "</linearGradient>",
+    "</defs>",
+    "<rect width='640' height='640' fill='url(#g)'/>",
+    "<circle cx='320' cy='260' r='96' fill='#3d3d3d'/>",
+    "<rect x='160' y='382' width='320' height='120' rx='20' fill='#3d3d3d'/>",
+    "</svg>"
+  ].join("");
+
+  const body = Buffer.from(svg, "utf8");
+  res.writeHead(200, {
+    "Content-Type": "image/svg+xml; charset=utf-8",
+    "Content-Length": body.length,
+    "Cache-Control": "no-cache"
+  });
+  res.end(body);
+}
+
 async function handleStatic(req, res, pathname) {
   if (/^\/u\/[a-zA-Z0-9_]+\/?$/.test(pathname)) {
     const publicProfilePage = path.resolve(PUBLIC_DIR, "public-profile.html");
@@ -162,6 +189,22 @@ async function handleStatic(req, res, pathname) {
 
     const ext = path.extname(requested).toLowerCase();
     const mimeType = MIME_TYPES[ext] || "application/octet-stream";
+
+    try {
+      const stats = await fsp.stat(requested);
+      if (!stats.isFile()) {
+        throw new Error("Not a file");
+      }
+    } catch {
+      const isImageRequest = mimeType.startsWith("image/");
+      if (isImageRequest) {
+        sendMissingUploadImagePlaceholder(res);
+        return;
+      }
+      sendText(res, 404, "Not found");
+      return;
+    }
+
     await serveFile(req, res, requested, mimeType);
     return;
   }

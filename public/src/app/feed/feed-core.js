@@ -17,11 +17,132 @@
       renderFeed
     } = deps;
     let feedUiBindingsReady = false;
+    let feedScrollRafId = 0;
+    let feedStickyOffsetRafId = 0;
+    let feedStickyOffsetTimer = 0;
+    let lastFeedScrollY = 0;
+    let feedTabObserver = null;
+    let lastFeedScrollDirection = 0;
+    let feedScrollDirectionDistance = 0;
+
+    function buildTrackDetailsHref(trackId, fallbackType = "track") {
+      const track = typeof getTrackById === "function"
+        ? getTrackById(trackId)
+        : state.tracks.find((entry) => entry.id === trackId);
+      if (track && typeof track.sharePath === "string" && track.sharePath) {
+        return track.sharePath;
+      }
+      const section = track
+        ? (isBeatTrack(track) ? "b" : "t")
+        : (fallbackType === "beat" ? "b" : "t");
+      return `/item-page.html?section=${section}&id=${encodeURIComponent(String(trackId || ""))}`;
+    }
+
+    function buildAlbumDetailsHref(albumId) {
+      const album = Array.isArray(state.albums)
+        ? state.albums.find((entry) => entry.id === albumId)
+        : null;
+      if (album && typeof album.sharePath === "string" && album.sharePath) {
+        return album.sharePath;
+      }
+      return `/item-page.html?section=a&id=${encodeURIComponent(String(albumId || ""))}`;
+    }
 
     function updateFeedStickyOffset() {
       const topbar = document.querySelector(".topbar");
       const topbarHeight = Math.max(72, Math.round(Number(topbar?.getBoundingClientRect?.().height || 96)));
       document.documentElement.style.setProperty("--feed-sticky-top", `${topbarHeight + 8}px`);
+    }
+
+    function getFeedScrollTop() {
+      return Math.max(
+        Number(window.scrollY || 0),
+        Number(window.pageYOffset || 0),
+        Number(document.scrollingElement?.scrollTop || 0),
+        Number(document.documentElement?.scrollTop || 0),
+        Number(document.body?.scrollTop || 0),
+        0
+      );
+    }
+
+    function isFeedTabActive() {
+      return state.activeTab === "feed" && Boolean(elements.feed?.classList.contains("active"));
+    }
+
+    function scheduleFeedStickyOffsetRefresh() {
+      if (feedStickyOffsetRafId) {
+        window.cancelAnimationFrame(feedStickyOffsetRafId);
+      }
+      if (feedStickyOffsetTimer) {
+        window.clearTimeout(feedStickyOffsetTimer);
+      }
+
+      updateFeedStickyOffset();
+      feedStickyOffsetRafId = window.requestAnimationFrame(() => {
+        feedStickyOffsetRafId = 0;
+        updateFeedStickyOffset();
+      });
+      feedStickyOffsetTimer = window.setTimeout(() => {
+        feedStickyOffsetTimer = 0;
+        updateFeedStickyOffset();
+      }, 260);
+    }
+
+    function setFeedChromeCondensed(condensed) {
+      const next = Boolean(condensed);
+      const bodyHasClass = document.body.classList.contains("feed-scroll-condensed");
+      const feedHasClass = Boolean(elements.feed?.classList.contains("feed-scroll-condensed"));
+      if (bodyHasClass === next && feedHasClass === next) {
+        return;
+      }
+      document.body.classList.toggle("feed-scroll-condensed", next);
+      elements.feed?.classList.toggle("feed-scroll-condensed", next);
+      lastFeedScrollDirection = 0;
+      feedScrollDirectionDistance = 0;
+      scheduleFeedStickyOffsetRefresh();
+    }
+
+    function syncFeedChromeByScroll({ forceExpand = false } = {}) {
+      const currentScrollY = getFeedScrollTop();
+      const scrollDelta = currentScrollY - lastFeedScrollY;
+      lastFeedScrollY = currentScrollY;
+      const scrollDirection = scrollDelta > 0 ? 1 : (scrollDelta < 0 ? -1 : 0);
+
+      if (scrollDirection !== 0) {
+        if (scrollDirection === lastFeedScrollDirection) {
+          feedScrollDirectionDistance += Math.abs(scrollDelta);
+        } else {
+          lastFeedScrollDirection = scrollDirection;
+          feedScrollDirectionDistance = Math.abs(scrollDelta);
+        }
+      }
+
+      const searchFocused = document.activeElement === elements.feedSearchInput;
+      const searchResultsOpen = Boolean(elements.feedSearchResults && !elements.feedSearchResults.classList.contains("hidden"));
+      if (forceExpand || !isFeedTabActive() || currentScrollY <= 56 || searchFocused || searchResultsOpen) {
+        setFeedChromeCondensed(false);
+        return;
+      }
+
+      if (scrollDirection > 0 && currentScrollY > 140 && feedScrollDirectionDistance > 28) {
+        setFeedChromeCondensed(true);
+        return;
+      }
+
+      if (scrollDirection < 0 && (feedScrollDirectionDistance > 18 || currentScrollY <= 84)) {
+        setFeedChromeCondensed(false);
+      }
+    }
+
+    function scheduleFeedChromeSync(options = {}) {
+      const { forceExpand = false } = options;
+      if (feedScrollRafId) {
+        window.cancelAnimationFrame(feedScrollRafId);
+      }
+      feedScrollRafId = window.requestAnimationFrame(() => {
+        feedScrollRafId = 0;
+        syncFeedChromeByScroll({ forceExpand });
+      });
     }
 
     function renderFeedSectionToggleLabels() {
@@ -55,7 +176,7 @@
 
     function toggleFeedSection(section) {
       if (!state.feedSectionsCollapsed) {
-        state.feedSectionsCollapsed = { selections: false, library: false };
+        state.feedSectionsCollapsed = { selections: true, library: false };
       }
       if (section !== "selections" && section !== "library") {
         return;
@@ -77,9 +198,43 @@
         toggleFeedSection("library");
       });
 
-      window.addEventListener("resize", updateFeedStickyOffset);
-      window.addEventListener("orientationchange", updateFeedStickyOffset);
+      elements.feedSearchInput?.addEventListener("focus", () => {
+        scheduleFeedChromeSync({ forceExpand: true });
+      });
+      elements.feedSearchInput?.addEventListener("input", () => {
+        scheduleFeedChromeSync({ forceExpand: true });
+      });
+      elements.feedSearchInput?.addEventListener("blur", () => {
+        window.setTimeout(() => {
+          scheduleFeedChromeSync();
+        }, 0);
+      });
+
+      lastFeedScrollY = getFeedScrollTop();
+      window.addEventListener("scroll", () => {
+        scheduleFeedChromeSync();
+      }, { passive: true });
+      window.addEventListener("resize", () => {
+        scheduleFeedStickyOffsetRefresh();
+        scheduleFeedChromeSync({ forceExpand: !isFeedTabActive() });
+      });
+      window.addEventListener("orientationchange", () => {
+        scheduleFeedStickyOffsetRefresh();
+        scheduleFeedChromeSync({ forceExpand: !isFeedTabActive() });
+      });
+
+      if (elements.feed && !feedTabObserver) {
+        feedTabObserver = new MutationObserver(() => {
+          scheduleFeedChromeSync({ forceExpand: !isFeedTabActive() });
+        });
+        feedTabObserver.observe(elements.feed, {
+          attributes: true,
+          attributeFilter: ["class"]
+        });
+      }
+
       updateFeedStickyOffset();
+      scheduleFeedChromeSync({ forceExpand: !isFeedTabActive() });
       applyFeedSectionVisibility();
     }
 
@@ -137,12 +292,8 @@
       if (!track) {
         return false;
       }
-      if (quickFilters.privacy !== "all") {
-        const publishMode = String(track.publishMode || "public").trim().toLowerCase();
-        if (publishMode !== quickFilters.privacy) {
-          return false;
-        }
-      }
+      // Privacy filter was removed from the feed UI.
+      // Keep matching logic aligned with the current controls.
       if (quickFilters.genre) {
         if (normalizeGenreValue(track.genre) !== normalizeGenreValue(quickFilters.genre)) {
           return false;
@@ -189,11 +340,13 @@
 
     function renderAccessBlocks() {
       const logged = Boolean(state.user);
+      const publishShell = document.getElementById("publishShell");
 
       elements.profileGuest.classList.toggle("hidden", logged);
       elements.profileContent.classList.toggle("hidden", !logged);
 
       elements.publishGuest.classList.toggle("hidden", logged);
+      publishShell?.classList.toggle("hidden", !logged);
       elements.uploadForm.classList.toggle("hidden", !logged);
       elements.albumForm.classList.toggle("hidden", !logged);
       if (elements.beatForm) {
@@ -446,19 +599,19 @@
         elements.feedSearchResults.classList.add("hidden");
       }
       if (match.type === "user" && match.username) {
-        window.location.href = `/u/${encodeURIComponent(match.username)}`;
+        window.open(`/public-profile.html?username=${encodeURIComponent(match.username)}`, "_blank", "noopener,noreferrer");
         return;
       }
       if (match.type === "track" && match.trackId) {
-        goToTrackFromSearch(match.trackId, { autoplay: false, source: "search" });
+        window.location.assign(buildTrackDetailsHref(match.trackId, "track"));
         return;
       }
       if (match.type === "beat" && match.trackId) {
-        goToTrackFromSearch(match.trackId, { autoplay: false, source: "search-beat" });
+        window.location.assign(buildTrackDetailsHref(match.trackId, "beat"));
         return;
       }
       if (match.type === "album" && match.albumId) {
-        goToAlbumFromSearch(match.albumId);
+        window.location.assign(buildAlbumDetailsHref(match.albumId));
       }
     }
 
@@ -556,11 +709,13 @@
 
       if (!normalized) {
         elements.feedSearchResults.classList.add("hidden");
+        scheduleFeedChromeSync();
         return;
       }
 
       const matches = buildFeedSearchMatches(normalized);
       elements.feedSearchResults.classList.remove("hidden");
+      scheduleFeedChromeSync({ forceExpand: true });
       elements.feedSearchResults.setAttribute("role", "listbox");
       state.feedSearchMatches = matches.slice();
 
@@ -622,7 +777,18 @@
       const text = document.createElement("p");
       text.className = "muted";
       text.appendChild(createUserLinkNode(track.username, "user-link compact-link"));
-      text.append(` • 👂 ${Number(track.listensCount || 0)} • 👍 ${track.likesCount} • 💬 ${track.commentsCount}`);
+      if (window.SferaIconKit?.createStat) {
+        text.append(
+          document.createTextNode(" • "),
+          window.SferaIconKit.createStat("listen", String(Number(track.listensCount || 0)), { className: "muted" }),
+          document.createTextNode(" • "),
+          window.SferaIconKit.createStat("like", String(track.likesCount), { className: "muted" }),
+          document.createTextNode(" • "),
+          window.SferaIconKit.createStat("comment", String(track.commentsCount), { className: "muted" })
+        );
+      } else {
+        text.append(` • ${Number(track.listensCount || 0)} • ${track.likesCount} • ${track.commentsCount}`);
+      }
 
       const actions = document.createElement("div");
       actions.className = "track-actions";

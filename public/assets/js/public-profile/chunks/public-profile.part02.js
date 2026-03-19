@@ -104,6 +104,18 @@ async function startTrackPlayback(trackId, queue, card, source = "public-profile
   await playCurrentTrack();
 }
 
+function promptDialog(options) {
+  return window.SferaDialogs.prompt(options);
+}
+
+function confirmDialog(options) {
+  return window.SferaDialogs.confirm(options);
+}
+
+function copyDialog(options) {
+  return window.SferaDialogs.copy(options);
+}
+
 function reportListenMilestonesIfNeeded() {
   const trackId = getCurrentTrackId();
   if (!trackId || !elements.globalPlayerAudio) {
@@ -206,6 +218,20 @@ function setupGlobalPlayer() {
 
   elements.globalPlayerAudio.addEventListener("durationchange", () => {
     updateSeekUi();
+  });
+
+  elements.globalPlayerAudio.addEventListener("error", async () => {
+    const currentTrackId = getCurrentTrackId();
+    const track = currentTrackId ? getTrackById(currentTrackId) : null;
+    const title = track && track.title ? `: ${track.title}` : "";
+    setStatus(`Аудиофайл недоступен${title}`, "error");
+    updateSeekUi();
+    updateTrackPlayButtons();
+    updateGlobalPlayerButtons();
+
+    if (Array.isArray(state.player.queue) && state.player.queue.length > 1) {
+      await playNextTrack();
+    }
   });
 
   elements.globalPlayerAudio.addEventListener("ratechange", () => {
@@ -351,6 +377,225 @@ function isBeatTrack(track) {
   return String(track?.kind || "song") === "beat";
 }
 
+function parseAdminCommaList(value, maxItems = 100, normalize = (item) => item) {
+  const normalized = String(value || "")
+    .split(",")
+    .map((item) => normalize(String(item || "").trim()))
+    .filter(Boolean);
+
+  return Array.from(new Set(normalized)).slice(0, maxItems);
+}
+
+function normalizeAdminTag(tag) {
+  return String(tag || "").trim().replace(/^#+/, "").toLowerCase();
+}
+
+function createAdminTrackEditor(track) {
+  const wrap = document.createElement("div");
+  wrap.className = "public-track-admin-actions";
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "ghost";
+  toggleBtn.textContent = isBeatTrack(track) ? "Админ: редактировать бит" : "Админ: редактировать трек";
+
+  const form = document.createElement("form");
+  form.className = "edit-form hidden";
+
+  const premiereValue = toLocalDateTimeInputValue(track.premiereAt);
+  const adminNote = document.createElement("p");
+  adminNote.className = "muted";
+  adminNote.textContent = "Администратор может менять название, описание, публикацию, обложку и аудиофайл чужого трека.";
+
+  form.innerHTML = `
+    <label>
+      Название
+      <input name="title" type="text" maxlength="120" required value="${escapeHtml(track.title || "")}" />
+    </label>
+    <label>
+      Жанр
+      <input name="genre" type="text" maxlength="60" required value="${escapeHtml(track.genre || "")}" />
+    </label>
+    <label>
+      Режим публикации
+      <select name="publishMode" required>
+        <option value="public"${track.publishMode === "public" ? " selected" : ""}>Публичный</option>
+        <option value="draft"${track.publishMode === "draft" ? " selected" : ""}>Черновик</option>
+        <option value="private"${track.publishMode === "private" ? " selected" : ""}>Приватный</option>
+        <option value="link"${track.publishMode === "link" ? " selected" : ""}>Доступ по ссылке</option>
+        <option value="premiere"${track.publishMode === "premiere" ? " selected" : ""}>Премьера по времени</option>
+      </select>
+    </label>
+    <label data-public-edit-premiere-wrap class="${track.publishMode === "premiere" ? "" : "hidden"}">
+      Дата и время премьеры
+      <input name="premiereAt" type="datetime-local" value="${escapeHtml(premiereValue)}" />
+    </label>
+    <label>
+      Авторы (через запятую)
+      <input name="authors" type="text" value="${escapeHtml((track.authors || []).join(", "))}" />
+    </label>
+    <label>
+      Продюсеры (через запятую)
+      <input name="producers" type="text" value="${escapeHtml((track.producers || []).join(", "))}" />
+    </label>
+    <label>
+      Хештеги
+      <input name="hashtags" type="text" value="${escapeHtml((track.hashtags || []).join(", "))}" />
+    </label>
+    <label>
+      Описание
+      <textarea name="description" rows="4" maxlength="1000">${escapeHtml(track.description || "")}</textarea>
+    </label>
+    ${isBeatTrack(track) ? "" : `
+    <label class="public-admin-checkbox">
+      <input name="isExplicit" type="checkbox" ${track.isExplicit ? "checked" : ""} />
+      <span>Метка E: в треке есть нецензурная лексика</span>
+    </label>
+    `}
+    <label>
+      Новая обложка (PNG/JPG)
+      <input name="cover" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+    </label>
+    <label>
+      Новый аудиофайл (MP3/WAV)
+      <input name="audio" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" />
+    </label>
+  `;
+
+  const beatMetaWrap = document.createElement("div");
+  beatMetaWrap.className = `inline-actions${isBeatTrack(track) ? "" : " hidden"}`;
+  beatMetaWrap.innerHTML = `
+    <label>
+      BPM
+      <input name="bpm" type="number" min="1" max="400" step="1" value="${escapeHtml(String(track.beatBpm || ""))}" />
+    </label>
+    <label>
+      Тональность
+      <input name="rootNote" type="text" maxlength="20" value="${escapeHtml(String(track.beatRootNote || ""))}" />
+    </label>
+  `;
+  form.appendChild(beatMetaWrap);
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Сохранить изменения";
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "ghost public-admin-danger";
+  deleteBtn.textContent = isBeatTrack(track) ? "Админ: удалить бит" : "Админ: удалить трек";
+
+  form.prepend(adminNote);
+  form.append(saveBtn, deleteBtn);
+
+  const publishModeSelect = form.querySelector("select[name='publishMode']");
+  const premiereWrap = form.querySelector("[data-public-edit-premiere-wrap]");
+  const premiereInput = form.querySelector("input[name='premiereAt']");
+
+  const updatePremiereVisibility = () => {
+    const isPremiere = publishModeSelect?.value === "premiere";
+    if (premiereWrap) {
+      premiereWrap.classList.toggle("hidden", !isPremiere);
+    }
+    if (premiereInput) {
+      premiereInput.required = isPremiere;
+      if (!isPremiere) {
+        premiereInput.value = "";
+      }
+    }
+  };
+
+  publishModeSelect?.addEventListener("change", updatePremiereVisibility);
+  updatePremiereVisibility();
+
+  toggleBtn.addEventListener("click", () => {
+    form.classList.toggle("hidden");
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const raw = new FormData(form);
+    const requestData = new FormData();
+    const publishMode = String(raw.get("publishMode") || "public").trim().toLowerCase();
+    const premiereAtIso = publishMode === "premiere"
+      ? parseLocalDateTimeToIso(String(raw.get("premiereAt") || ""))
+      : null;
+
+    requestData.append("title", String(raw.get("title") || "").trim());
+    requestData.append("description", String(raw.get("description") || "").trim());
+    requestData.append("genre", String(raw.get("genre") || "").trim());
+    requestData.append("publishMode", publishMode);
+    requestData.append("premiereAt", premiereAtIso || "");
+    requestData.append("isExplicit", !isBeatTrack(track) && raw.get("isExplicit") ? "true" : "false");
+    requestData.append("authors", parseAdminCommaList(raw.get("authors"), 100).join(", "));
+    requestData.append("producers", parseAdminCommaList(raw.get("producers"), 100).join(", "));
+    requestData.append("hashtags", parseAdminCommaList(raw.get("hashtags"), 5, normalizeAdminTag).join(", "));
+
+    if (isBeatTrack(track)) {
+      requestData.append("bpm", String(raw.get("bpm") || "").trim());
+      requestData.append("rootNote", String(raw.get("rootNote") || "").trim());
+    }
+
+    const coverFile = raw.get("cover");
+    const audioFile = raw.get("audio");
+    if (coverFile instanceof File && coverFile.size > 0) {
+      requestData.append("cover", coverFile, coverFile.name || "cover.jpg");
+    }
+    if (audioFile instanceof File && audioFile.size > 0) {
+      requestData.append("audio", audioFile, audioFile.name || "track.mp3");
+    }
+
+    try {
+      setStatus("Сохраняю изменения трека...");
+      await api(`/api/tracks/${track.id}`, {
+        method: "PUT",
+        body: requestData
+      });
+      await loadProfile(state.profileUsername);
+      setStatus("Трек обновлён", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    const confirmed = await confirmDialog({
+      title: `Удалить ${isBeatTrack(track) ? "бит" : "трек"}?`,
+      message: `${isBeatTrack(track) ? "Бит" : "Трек"} "${track.title}" будет удалён без возможности восстановления.`,
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setStatus(`Удаляю ${isBeatTrack(track) ? "бит" : "трек"}...`);
+      await api(`/api/tracks/${track.id}`, {
+        method: "DELETE"
+      });
+      await loadProfile(state.profileUsername);
+      setStatus(isBeatTrack(track) ? "Бит удалён" : "Трек удалён", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  wrap.append(toggleBtn, form);
+  return wrap;
+}
+
+function createTrackExplicitBadge() {
+  const badge = document.createElement("span");
+  badge.className = "track-explicit-badge";
+  badge.textContent = "E";
+  badge.setAttribute("aria-label", "В треке присутствует нецензурная лексика");
+  badge.setAttribute("data-tooltip", "В треке присутствует нецензурная лексика");
+  badge.tabIndex = 0;
+  return badge;
+}
+
 function createTrackCard(track) {
   const card = document.createElement("article");
   card.className = "track-card";
@@ -369,7 +614,13 @@ function createTrackCard(track) {
   main.className = "track-main";
 
   const title = document.createElement("h4");
-  title.textContent = track.title;
+  title.className = "track-title-heading";
+  const titleText = document.createElement("span");
+  titleText.textContent = track.title;
+  title.appendChild(titleText);
+  if (track.isExplicit) {
+    title.appendChild(createTrackExplicitBadge());
+  }
 
   const meta = document.createElement("div");
   meta.className = "track-meta";
@@ -387,8 +638,14 @@ function createTrackCard(track) {
 
   const tags = createTagWrap(track.hashtags || []);
   const audioPlayer = buildAudioPlayer(track, "public-profile");
+  const adminEditor = state.profileData?.viewer?.isAdmin && !track.isOwner
+    ? createAdminTrackEditor(track)
+    : null;
 
   main.append(title, meta, description, tags, audioPlayer);
+  if (adminEditor) {
+    main.appendChild(adminEditor);
+  }
   card.append(coverWrap, main);
   return card;
 }
@@ -492,6 +749,89 @@ async function toggleFollow(targetUserId) {
 }
 
 let publicMessagesModalBound = false;
+const MESSAGE_LINK_PATTERN = /(?:https?:\/\/|www\.)[^\s<]+/gi;
+
+function trimLinkSuffix(value) {
+  return String(value || "").replace(/[.,!?;:]+$/u, "");
+}
+
+function normalizeExternalLinkHref(value) {
+  let href = String(value || "").trim();
+  if (!href) {
+    return "";
+  }
+  if (/^www\./i.test(href)) {
+    href = `https://${href}`;
+  }
+  try {
+    const url = new URL(href);
+    const protocol = String(url.protocol || "").toLowerCase();
+    if (protocol !== "http:" && protocol !== "https:") {
+      return "";
+    }
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function renderLinkifiedText(container, value) {
+  if (!container) {
+    return;
+  }
+
+  const sourceText = String(value || "");
+  container.textContent = "";
+  if (!sourceText) {
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  let cursor = 0;
+  MESSAGE_LINK_PATTERN.lastIndex = 0;
+
+  for (const match of sourceText.matchAll(MESSAGE_LINK_PATTERN)) {
+    const rawMatch = String(match[0] || "");
+    const startIndex = Number(match.index);
+
+    if (startIndex > cursor) {
+      fragment.appendChild(document.createTextNode(sourceText.slice(cursor, startIndex)));
+    }
+
+    const displayText = trimLinkSuffix(rawMatch);
+    const suffixText = rawMatch.slice(displayText.length);
+    const href = normalizeExternalLinkHref(displayText);
+
+    if (href) {
+      const link = document.createElement("a");
+      link.className = "user-link";
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer nofollow";
+      link.textContent = displayText;
+      fragment.appendChild(link);
+    } else {
+      fragment.appendChild(document.createTextNode(rawMatch));
+    }
+
+    if (suffixText) {
+      fragment.appendChild(document.createTextNode(suffixText));
+    }
+
+    cursor = startIndex + rawMatch.length;
+  }
+
+  if (cursor < sourceText.length) {
+    fragment.appendChild(document.createTextNode(sourceText.slice(cursor)));
+  }
+
+  if (!fragment.childNodes.length) {
+    container.textContent = sourceText;
+    return;
+  }
+
+  container.appendChild(fragment);
+}
 
 function closePublicMessagesModal() {
   if (!elements.publicMessagesModal) {
@@ -537,7 +877,7 @@ function renderPublicMessagesModal() {
       head.textContent = `${message.mine ? "Вы" : "@" + message.fromUsername} • ${formatDate(message.createdAt)}`;
 
       const text = document.createElement("p");
-      text.textContent = message.text;
+      renderLinkifiedText(text, message.text);
 
       row.append(head, text);
       elements.publicMessagesModalChatList.appendChild(row);
@@ -658,7 +998,11 @@ function renderProfileActions(data) {
       await navigator.clipboard.writeText(profileUrl);
       setStatus("Ссылка на профиль скопирована", "success");
     } catch {
-      window.prompt("Скопируй ссылку на профиль", profileUrl);
+      await copyDialog({
+        title: "Ссылка на профиль",
+        message: "Скопируй ссылку вручную, если браузер не дал доступ к буферу.",
+        value: profileUrl
+      });
     }
   });
 
@@ -696,7 +1040,230 @@ function renderProfileActions(data) {
     sendMessageToProfile(user);
   });
 
-  elements.publicProfileActions.append(followBtn, messageBtn, shareBtn);
+  const reportBtn = document.createElement("button");
+  reportBtn.type = "button";
+  reportBtn.className = "ghost";
+  reportBtn.textContent = "Пожаловаться";
+  reportBtn.addEventListener("click", async () => {
+    const reasonInput = await promptDialog({
+      title: "Жалоба на профиль",
+      message: "Кратко укажи причину жалобы.",
+      value: "Спам / нарушение правил",
+      placeholder: "Причина жалобы",
+      confirmText: "Отправить"
+    });
+    if (reasonInput === null) {
+      return;
+    }
+    const reason = String(reasonInput || "").trim();
+    if (reason.length < 3) {
+      setStatus("Укажи причину жалобы хотя бы в нескольких словах.", "error");
+      return;
+    }
+    const detailsInput = await promptDialog({
+      title: "Дополнительные детали",
+      message: "Если нужно, добавь контекст для администраторов.",
+      value: "",
+      placeholder: "Подробности жалобы",
+      multiline: true,
+      confirmText: "Продолжить"
+    });
+    const details = detailsInput === null ? "" : String(detailsInput || "").trim();
+
+    try {
+      setStatus("Отправляю жалобу на профиль...");
+      await api("/api/reports", {
+        method: "POST",
+        body: {
+          targetType: "user",
+          targetId: user.id,
+          reason,
+          details
+        }
+      });
+      setStatus("Жалоба на профиль отправлена администраторам.", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  const actionNodes = [followBtn, messageBtn, reportBtn, shareBtn];
+  if (viewer.isAdmin) {
+    const adminBtn = document.createElement("button");
+    adminBtn.type = "button";
+    adminBtn.className = "ghost";
+    adminBtn.textContent = "Админ-панель";
+    adminBtn.addEventListener("click", () => {
+      elements.publicAdminPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    actionNodes.push(adminBtn);
+  }
+
+  elements.publicProfileActions.append(...actionNodes);
+}
+
+function updatePublicProfileUrl(user) {
+  if (!user?.username) {
+    return;
+  }
+
+  const profileUrl = new URL("/public-profile.html", window.location.origin);
+  profileUrl.searchParams.set("username", user.username);
+  if (user.id) {
+    profileUrl.searchParams.set("uid", user.id);
+  }
+  window.history.replaceState({}, "", `${profileUrl.pathname}${profileUrl.search}`);
+}
+
+function renderAdminPanel(data) {
+  if (!elements.publicAdminPanel) {
+    return;
+  }
+
+  const user = data?.user || null;
+  const viewer = data?.viewer || null;
+  elements.publicAdminPanel.innerHTML = "";
+
+  if (!user || !viewer?.isAdmin || user.isSelf) {
+    elements.publicAdminPanel.classList.add("hidden");
+    return;
+  }
+
+  elements.publicAdminPanel.classList.remove("hidden");
+
+  const title = document.createElement("h3");
+  title.textContent = "Админ-панель профиля";
+
+  const note = document.createElement("p");
+  note.className = "muted";
+  note.textContent = user.isBanned
+    ? `Аккаунт сейчас заблокирован${user.banReason ? `: ${user.banReason}` : ""}`
+    : user.isVerifiedArtist
+      ? "У этого аккаунта уже есть галочка подтверждённого автора. Здесь её тоже можно снять или выдать заново."
+      : "Здесь можно менять ник, био, аватар, шапку, банить, выдавать галочку автора и удалять аккаунт.";
+
+  const form = document.createElement("form");
+  form.className = "mini-form";
+  form.innerHTML = `
+    <label>
+      Никнейм
+      <input name="username" type="text" minlength="3" maxlength="24" required value="${escapeHtml(user.username || "")}" />
+    </label>
+    <label>
+      Описание профиля
+      <textarea name="bio" rows="4" maxlength="500">${escapeHtml(user.bio || "")}</textarea>
+    </label>
+    <label class="public-admin-checkbox">
+      <input name="isVerifiedArtist" type="checkbox" ${user.isVerifiedArtist ? "checked" : ""} />
+      <span>Подтверждённый автор</span>
+    </label>
+    <label class="public-admin-checkbox">
+      <input name="isBanned" type="checkbox" ${user.isBanned ? "checked" : ""} />
+      <span>Заблокировать аккаунт</span>
+    </label>
+    <label>
+      Причина блокировки
+      <input name="banReason" type="text" maxlength="500" value="${escapeHtml(user.banReason || "")}" />
+    </label>
+    <label>
+      Новый аватар (PNG/JPG/GIF)
+      <input name="avatar" type="file" accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif" />
+    </label>
+    <label class="public-admin-checkbox">
+      <input name="removeAvatar" type="checkbox" />
+      <span>Удалить текущий аватар</span>
+    </label>
+    <label>
+      Новая шапка (PNG/JPG)
+      <input name="header" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+    </label>
+    <label class="public-admin-checkbox">
+      <input name="removeHeader" type="checkbox" />
+      <span>Удалить текущую шапку</span>
+    </label>
+  `;
+
+  const actions = document.createElement("div");
+  actions.className = "inline-actions";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.textContent = "Сохранить профиль";
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "ghost public-admin-danger";
+  deleteBtn.textContent = "Удалить аккаунт";
+
+  actions.append(saveBtn, deleteBtn);
+  form.appendChild(actions);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const raw = new FormData(form);
+    const requestData = new FormData();
+    requestData.append("username", String(raw.get("username") || "").trim());
+    requestData.append("bio", String(raw.get("bio") || "").trim());
+    requestData.append("isVerifiedArtist", raw.get("isVerifiedArtist") ? "true" : "false");
+    requestData.append("isBanned", raw.get("isBanned") ? "true" : "false");
+    requestData.append("banReason", String(raw.get("banReason") || "").trim());
+    requestData.append("removeAvatar", raw.get("removeAvatar") ? "true" : "false");
+    requestData.append("removeHeader", raw.get("removeHeader") ? "true" : "false");
+
+    const avatarFile = raw.get("avatar");
+    const headerFile = raw.get("header");
+    if (avatarFile instanceof File && avatarFile.size > 0) {
+      const avatarFallbackName = String(avatarFile.type || "").toLowerCase() === "image/gif" ? "avatar.gif" : "avatar.jpg";
+      requestData.append("avatar", avatarFile, avatarFile.name || avatarFallbackName);
+    }
+    if (headerFile instanceof File && headerFile.size > 0) {
+      requestData.append("header", headerFile, headerFile.name || "header.jpg");
+    }
+
+    try {
+      setStatus("Сохраняю профиль пользователя...");
+      const result = await api(`/api/admin/users/${user.id}`, {
+        method: "PUT",
+        body: requestData
+      });
+      if (result?.user?.username) {
+        state.profileUsername = result.user.username;
+        updatePublicProfileUrl({ id: user.id, username: result.user.username });
+      }
+      await loadProfile(state.profileUsername);
+      setStatus("Профиль пользователя обновлён", "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    const confirmed = await confirmDialog({
+      title: "Удалить аккаунт?",
+      message: `Аккаунт @${user.username} будет удалён без возможности восстановления.`,
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setStatus("Удаляю аккаунт...");
+      await api(`/api/admin/users/${user.id}`, {
+        method: "DELETE"
+      });
+      setStatus("Аккаунт удалён", "success");
+      window.setTimeout(() => {
+        window.location.href = "/";
+      }, 250);
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  });
+
+  elements.publicAdminPanel.append(title, note, form);
 }
 
 function renderProfile(data) {
@@ -715,7 +1282,19 @@ function renderProfile(data) {
   }
 
   setImageWithFallback(elements.publicAvatar, user.avatarUrl);
-  elements.publicUsername.textContent = `@${user.username}`;
+  elements.publicUsername.textContent = "";
+  const usernameText = document.createElement("span");
+  usernameText.textContent = `@${user.username}`;
+  elements.publicUsername.appendChild(usernameText);
+  if (user.isVerifiedArtist) {
+    const verifiedBadge = document.createElement("span");
+    verifiedBadge.className = "profile-role-badge is-verified";
+    verifiedBadge.textContent = "✓";
+    verifiedBadge.setAttribute("aria-label", "Этот пользователь подтверждён как автор песен");
+    verifiedBadge.setAttribute("data-tooltip", "Этот пользователь подтверждён как автор песен");
+    verifiedBadge.tabIndex = 0;
+    elements.publicUsername.appendChild(verifiedBadge);
+  }
   elements.publicBio.textContent = user.bio || "Описание профиля не заполнено";
   elements.publicCreated.textContent = `В sfera с ${formatDate(user.createdAt)}`;
 
@@ -736,6 +1315,7 @@ function renderProfile(data) {
   }
 
   renderProfileActions(data);
+  renderAdminPanel(data);
 
   const tracks = Array.isArray(data.tracks) ? data.tracks : [];
   const songTracks = tracks.filter((track) => !isBeatTrack(track));
@@ -758,14 +1338,14 @@ function renderProfile(data) {
 }
 
 async function loadProfile(username) {
-  const data = await api(`/api/public/users/${encodeURIComponent(username)}`);
+  const requestedUserId = String(new URLSearchParams(window.location.search).get("uid") || "").trim();
+  const profilePath = `/api/public/users/${encodeURIComponent(username)}`;
+  const requestPath = requestedUserId
+    ? `${profilePath}?uid=${encodeURIComponent(requestedUserId)}`
+    : profilePath;
+  const data = await api(requestPath);
   state.profileData = data;
   applyPublicChromeLanguage();
-  if (state.profileData?.viewer) {
-    connectPublicRealtimeSocket();
-  } else {
-    disconnectPublicRealtimeSocket(true);
-  }
   reconcilePlayerQueue();
   renderProfile(data);
 }
@@ -783,7 +1363,9 @@ async function init() {
   setupGlobalPlayer();
   applyVolumeToGlobalPlayer(state.playbackVolume);
 
-  state.profileUsername = decodeURIComponent(
+  const currentUrl = new URL(window.location.href);
+  const queryUsername = String(currentUrl.searchParams.get("username") || "").trim();
+  state.profileUsername = queryUsername || decodeURIComponent(
     window.location.pathname.replace(/^\/u\//, "").replace(/\/+$/, "")
   ).trim();
 
@@ -798,25 +1380,12 @@ async function init() {
     setStatus("Загрузка профиля...");
     showPublicLoadingSkeletons();
     await loadProfile(state.profileUsername);
-    await refreshOnlineUsers().catch(() => {
-      // ignore transient online-counter errors
-    });
     setStatus("Профиль загружен", "success");
   } catch (error) {
     elements.publicProfileCard.classList.add("hidden");
     elements.publicNotFound.classList.remove("hidden");
     setStatus(error.message, "error");
   }
-
-  setInterval(() => {
-    refreshOnlineUsers().catch(() => {
-      // ignore transient polling errors
-    });
-  }, ONLINE_POLL_INTERVAL_MS);
-
-  window.addEventListener("beforeunload", () => {
-    disconnectPublicRealtimeSocket(true);
-  });
 }
 
 init();

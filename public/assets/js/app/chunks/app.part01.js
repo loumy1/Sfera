@@ -33,7 +33,7 @@ const state = {
   uiLanguage: "ru",
   uiDensity: "comfortable",
   feedSectionsCollapsed: {
-    selections: false,
+    selections: true,
     library: false
   },
   profileSectionsCollapsed: {
@@ -62,6 +62,7 @@ const state = {
     seekDragging: false,
     seekPreviewTime: 0,
     isExpanded: false,
+    lyricsHidden: false,
     isMuted: false,
     lastVolumeBeforeMute: 0.5
   },
@@ -149,6 +150,7 @@ const elements = {
   trackProducers: document.getElementById("trackProducers"),
   trackHashtags: document.getElementById("trackHashtags"),
   trackDescription: document.getElementById("trackDescription"),
+  trackExplicit: document.getElementById("trackExplicit"),
   trackCover: document.getElementById("trackCover"),
   trackFile: document.getElementById("trackFile"),
   uploadBtn: document.getElementById("uploadBtn"),
@@ -293,9 +295,9 @@ const elements = {
   playerTrackInfoWrap: document.getElementById("playerTrackInfoWrap"),
   playerPrevBtn: document.getElementById("playerPrevBtn"),
   playerPlayBtn: document.getElementById("playerPlayBtn"),
-  playerPauseBtn: document.getElementById("playerPauseBtn"),
   playerStopBtn: document.getElementById("playerStopBtn"),
   playerNextBtn: document.getElementById("playerNextBtn"),
+  playerLyricsBtn: document.getElementById("playerLyricsBtn"),
   playerExpandBtn: document.getElementById("playerExpandBtn"),
   playerShuffleBtn: document.getElementById("playerShuffleBtn"),
   playerRepeatAllBtn: document.getElementById("playerRepeatAllBtn"),
@@ -304,14 +306,15 @@ const elements = {
   playerVolumeSlider: document.getElementById("playerVolumeSlider"),
   playerSeekSlider: document.getElementById("playerSeekSlider"),
   playerCurrentTime: document.getElementById("playerCurrentTime"),
-  playerDuration: document.getElementById("playerDuration")
+  playerDuration: document.getElementById("playerDuration"),
+  playerExpandedContent: document.getElementById("playerExpandedContent")
 };
 
 const MAX_MP3_BYTES = 15 * 1024 * 1024;
 const MAX_WAV_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const COVER_SIZE = 500;
-const MAX_ALBUM_TRACKS = 100;
+const MAX_ALBUM_TRACKS = 1000;
 const MAX_ALBUM_DURATION_SECONDS = 120 * 60;
 const VOLUME_STORAGE_KEY = "beatoon_volume";
 const EQUALIZER_STORAGE_KEY = "beatoon_equalizer_v1";
@@ -582,23 +585,33 @@ function applyUiLanguage(lang) {
   setTextBySelector("#feedLibraryWrap .card:first-child h3:nth-of-type(3)", t("feedLibraryLikedTracks", nextLang));
 
   setTextBySelector("#tab-settings .window-settings > h2", t("settingsTitle", nextLang));
-  setTextBySelector("#tab-settings .sub-grid .card:nth-child(1) > h3", t("settingsCardAccount", nextLang));
-  setTextBySelector("#tab-settings .sub-grid .card:nth-child(2) > h3", t("settingsCardProfileDesign", nextLang));
-  setTextBySelector("#tab-settings .sub-grid .card:nth-child(3) > h3", t("settingsCardEqualizer", nextLang));
-  setTextBySelector("#tab-settings .sub-grid:nth-of-type(2) .card:nth-child(1) > h3", t("settingsCardSubscriptions", nextLang));
-  setTextBySelector("#tab-settings .sub-grid:nth-of-type(2) .card:nth-child(2) > h3", t("settingsCardMessages", nextLang));
-  setTextBySelector("#tab-settings .sub-grid:nth-of-type(2) .card:nth-child(3) > h3", t("settingsCardRecent", nextLang));
+  setTextBySelector("#settingsAccountTitle", t("settingsCardAccount", nextLang));
+  setTextBySelector("#settingsEqualizerTitle", t("settingsCardEqualizer", nextLang));
+  setTextBySelector("#settingsSubscriptionsTitle", t("settingsCardSubscriptions", nextLang));
+  setTextBySelector("#settingsMessagesTitle", t("settingsCardMessages", nextLang));
+  setTextBySelector("#settingsRecentTitle", t("settingsCardRecent", nextLang));
   setTextBySelector("#registerForm h4", t("authRegisterTitle", nextLang));
   setTextBySelector("#registerForm button", t("authRegisterBtn", nextLang));
   setTextBySelector("#loginForm h4", t("authLoginTitle", nextLang));
   setTextBySelector("#loginForm button", t("authLoginBtn", nextLang));
-  setTextBySelector("#authGateTitle", "sfera");
+  setTextBySelector("#authGateTitle .brand-logo-text", "sfera");
   setTextBySelector("#authGateHint", t("authGateHint", nextLang));
+  setTextBySelector("#authGateEyebrow", t("authGateEyebrow", nextLang));
+  setTextBySelector("#authGateLeadTitle", t("authGateLeadTitle", nextLang));
+  setTextBySelector("#authGateLeadText", t("authGateLeadText", nextLang));
+  setTextBySelector("#authGateFeatureReleases", t("authGateFeatureReleases", nextLang));
+  setTextBySelector("#authGateFeatureLyrics", t("authGateFeatureLyrics", nextLang));
+  setTextBySelector("#authGateFeatureCommunity", t("authGateFeatureCommunity", nextLang));
+  setTextBySelector("#authGateTabLoginBtn", t("authGateTabLogin", nextLang));
+  setTextBySelector("#authGateTabRegisterBtn", t("authGateTabRegister", nextLang));
+  setTextBySelector("#authGateTabResetBtn", t("authGateTabReset", nextLang));
   setTextBySelector("#authGateLanguageLabel", t("authGateLanguageLabel", nextLang));
   setTextBySelector("#authGateRegisterForm h4", t("authRegisterTitle", nextLang));
   setTextBySelector("#authGateRegisterForm button", t("authRegisterBtn", nextLang));
   setTextBySelector("#authGateLoginForm h4", t("authLoginTitle", nextLang));
   setTextBySelector("#authGateLoginForm button", t("authLoginBtn", nextLang));
+  setTextBySelector("#authGatePasswordResetRequestForm h4", t("authGateResetTitle", nextLang));
+  setTextBySelector("#authGatePasswordResetRequestForm button", t("authGateResetBtn", nextLang));
   setTextBySelector("#authGateGuestBtn", t("authGateGuestBtn", nextLang));
   setTextBySelector("#logoutBtn", t("authLogoutBtn", nextLang));
   setTextBySelector("#authLogged > p.muted", t("authNicknameFixed", nextLang));
@@ -631,15 +644,12 @@ function applyUiLanguage(lang) {
           : "Message text";
   }
   if (elements.contactToggleBtn) {
-    elements.contactToggleBtn.textContent = t("contactToggle", nextLang);
+    const supportPanelHidden = elements.contactPanel?.classList.contains("hidden") !== false;
+    elements.contactToggleBtn.textContent = supportPanelHidden
+      ? t("contactOpen", nextLang)
+      : t("contactHide", nextLang);
   }
-  setTextBySelector("#contactToggleBtn", t("contactToggle", nextLang));
-  if (elements.contactToggleBtn?.closest(".card")) {
-    const titleNode = elements.contactToggleBtn.closest(".card").querySelector("h3");
-    if (titleNode) {
-      titleNode.textContent = t("contactTitle", nextLang);
-    }
-  }
+  setTextBySelector("#settingsContactTitle", t("contactTitle", nextLang));
   if (document.getElementById("languageCardTitle")) {
     document.getElementById("languageCardTitle").textContent = t("languageCardTitle", nextLang);
   }
@@ -719,6 +729,7 @@ function applyUiLanguage(lang) {
   setLabelTextForControl(elements.trackDescription, t("publishFieldTrackDescription", nextLang));
   setLabelTextForControl(elements.trackCover, t("publishFieldTrackCover", nextLang));
   setLabelTextForControl(elements.trackFile, t("publishFieldTrackAudio", nextLang));
+  setTextBySelector("#trackExplicitLabel", t("publishFieldTrackExplicit", nextLang));
   setLabelTextForControl(elements.albumTitle, t("publishFieldAlbumTitle", nextLang));
   setLabelTextForControl(elements.albumGenre, t("publishFieldGenre", nextLang));
   setLabelTextForControl(elements.albumAuthors, t("publishFieldAuthors", nextLang));
@@ -847,6 +858,7 @@ function applyUiLanguage(lang) {
   } catch {
     // ignore early-render errors during bootstrap
   }
+  window.SferaPasswordToggles?.refresh?.();
 }
 
 function renderOnlineCounter() {
@@ -901,14 +913,14 @@ function buildTrackHref(trackId) {
     if (typeof track.sharePath === "string" && track.sharePath) {
       return track.sharePath;
     }
-    const prefix = String(track.kind || "").toLowerCase() === "beat" ? "/b/" : "/t/";
-    return `${prefix}${encodeURIComponent(String(track.id || ""))}`;
+    const section = String(track.kind || "").toLowerCase() === "beat" ? "b" : "t";
+    return `/item-page.html?section=${section}&id=${encodeURIComponent(String(track.id || ""))}`;
   }
-  return `/t/${encodeURIComponent(String(trackId || ""))}`;
+  return `/item-page.html?section=t&id=${encodeURIComponent(String(trackId || ""))}`;
 }
 
 function buildUserHref(username) {
-  return `/u/${encodeURIComponent(String(username || ""))}`;
+  return `/public-profile.html?username=${encodeURIComponent(String(username || ""))}`;
 }
 
 function buildAlbumHref(albumId) {
@@ -917,22 +929,42 @@ function buildAlbumHref(albumId) {
     if (typeof album.sharePath === "string" && album.sharePath) {
       return album.sharePath;
     }
-    return `/a/${encodeURIComponent(String(album.id || ""))}`;
+    return `/item-page.html?section=a&id=${encodeURIComponent(String(album.id || ""))}`;
   }
-  return `/a/${encodeURIComponent(String(albumId || ""))}`;
+  return `/item-page.html?section=a&id=${encodeURIComponent(String(albumId || ""))}`;
+}
+
+function createTrackExplicitBadge({ tooltip, compact = false } = {}) {
+  const tooltipText = typeof tooltip === "string" && tooltip.trim()
+    ? tooltip.trim()
+    : t("trackExplicitTooltip");
+  const badge = document.createElement("span");
+  badge.className = `track-explicit-badge${compact ? " is-compact" : ""}`;
+  badge.textContent = "E";
+  badge.setAttribute("aria-label", tooltipText);
+  badge.setAttribute("data-tooltip", tooltipText);
+  badge.tabIndex = 0;
+  return badge;
 }
 
 function createTrackLink(track, { source = "feed", className = "track-title-link", text } = {}) {
   const link = document.createElement("a");
   link.className = className;
-  link.href = (track && typeof track.sharePath === "string" && track.sharePath) ? track.sharePath : buildTrackHref(track);
-  link.textContent = text ?? String(track.title || "");
+  const href = (track && typeof track.sharePath === "string" && track.sharePath) ? track.sharePath : buildTrackHref(track);
+  link.href = href;
+  const titleText = document.createElement("span");
+  titleText.className = "track-title-text";
+  titleText.textContent = text ?? String(track.title || "");
+  link.appendChild(titleText);
+  if (track && track.isExplicit) {
+    link.appendChild(createTrackExplicitBadge());
+  }
   link.addEventListener("click", (event) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
       return;
     }
     event.preventDefault();
-    goToTrackFromSearch(track.id, { autoplay: false, source });
+    window.location.assign(href);
   });
   return link;
 }
@@ -941,6 +973,8 @@ function createUserLinkNode(username, className = "user-link") {
   const link = document.createElement("a");
   link.className = className;
   link.href = buildUserHref(username);
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
   link.textContent = `@${username}`;
   return link;
 }

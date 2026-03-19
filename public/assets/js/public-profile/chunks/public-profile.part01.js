@@ -33,6 +33,7 @@ const elements = {
   publicBio: document.getElementById("publicBio"),
   publicCreated: document.getElementById("publicCreated"),
   publicProfileActions: document.getElementById("publicProfileActions"),
+  publicAdminPanel: document.getElementById("publicAdminPanel"),
   publicTracksCount: document.getElementById("publicTracksCount"),
   publicRepostsCount: document.getElementById("publicRepostsCount"),
   publicLikesCount: document.getElementById("publicLikesCount"),
@@ -130,6 +131,15 @@ function publicT(key) {
   return PUBLIC_UI_MESSAGES[lang]?.[key] || PUBLIC_UI_MESSAGES.ru[key] || key;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function applyPublicChromeLanguage() {
   document.documentElement.lang = getPublicUiLanguage();
   const beta = document.querySelector("header .brand-wrap > .brand-beta");
@@ -200,6 +210,34 @@ function formatDate(iso) {
   const lang = getPublicUiLanguage();
   const locale = lang === "uk" ? "uk-UA" : lang === "zh" ? "zh-CN" : lang === "en" ? "en-US" : "ru-RU";
   return date.toLocaleDateString(locale, { dateStyle: "medium" });
+}
+
+function toLocalDateTimeInputValue(iso) {
+  if (!iso) {
+    return "";
+  }
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function parseLocalDateTimeToIso(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Укажи корректную дату и время");
+  }
+
+  return date.toISOString();
 }
 
 function formatDuration(totalSeconds) {
@@ -475,8 +513,12 @@ async function api(path, options = {}) {
   };
 
   if (options.body !== undefined) {
-    init.headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(options.body);
+    if (options.body instanceof FormData) {
+      init.body = options.body;
+    } else {
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(options.body);
+    }
   }
 
   const candidatePaths = apiCompatPaths(path);

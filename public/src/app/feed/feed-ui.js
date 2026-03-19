@@ -48,6 +48,54 @@
     };
     let albumModalBindingsReady = false;
 
+    function promptDialog(options) {
+      return window.SferaDialogs.prompt(options);
+    }
+
+    function confirmDialog(options) {
+      return window.SferaDialogs.confirm(options);
+    }
+
+    function copyDialog(options) {
+      return window.SferaDialogs.copy(options);
+    }
+
+    function createInlineStat(iconName, text) {
+      if (window.SferaIconKit?.createStat) {
+        return window.SferaIconKit.createStat(iconName, text, {
+          className: "muted"
+        });
+      }
+      const node = document.createElement("span");
+      node.className = "muted";
+      node.textContent = text;
+      return node;
+    }
+
+    function createTrackMetricButton({ iconName, count = 0, active = false, label = "", disabled = false, onClick }) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `ghost action-btn track-metric-btn sf-icon-btn${active ? " active" : ""}`;
+      button.disabled = Boolean(disabled);
+      if (window.SferaIconKit?.createIcon) {
+        button.appendChild(window.SferaIconKit.createIcon(iconName, { className: "sf-icon--sm" }));
+      } else {
+        const icon = document.createElement("span");
+        icon.className = "sf-icon sf-icon--sm";
+        icon.dataset.icon = iconName;
+        button.appendChild(icon);
+      }
+      const countNode = document.createElement("span");
+      countNode.className = "track-metric-btn-count";
+      countNode.textContent = String(Number(count || 0));
+      button.appendChild(countNode);
+      button.setAttribute("aria-label", label ? `${label}: ${Number(count || 0)}` : String(Number(count || 0)));
+      if (typeof onClick === "function") {
+        button.addEventListener("click", onClick);
+      }
+      return button;
+    }
+
     function hasBlockingModalOpen() {
       if (albumModalElements.root && !albumModalElements.root.classList.contains("hidden")) {
         return true;
@@ -222,11 +270,22 @@
         editBtn.className = "ghost";
         editBtn.textContent = "Редактировать";
         editBtn.addEventListener("click", async () => {
-          const nextTitle = window.prompt("Новое название плейлиста", playlist.title);
+          const nextTitle = await promptDialog({
+            title: "Новое название плейлиста",
+            value: playlist.title || "",
+            placeholder: "Название плейлиста",
+            confirmText: "Сохранить"
+          });
           if (nextTitle === null) {
             return;
           }
-          const nextDescription = window.prompt("Новое описание плейлиста", playlist.description || "");
+          const nextDescription = await promptDialog({
+            title: "Новое описание плейлиста",
+            value: playlist.description || "",
+            placeholder: "Описание плейлиста",
+            multiline: true,
+            confirmText: "Сохранить"
+          });
           if (nextDescription === null) {
             return;
           }
@@ -250,7 +309,13 @@
         deleteBtn.className = "ghost";
         deleteBtn.textContent = "Удалить";
         deleteBtn.addEventListener("click", async () => {
-          const confirmDelete = window.confirm(`Удалить плейлист "${playlist.title}"?`);
+          const confirmDelete = await confirmDialog({
+            title: "Удалить плейлист?",
+            message: `Плейлист "${playlist.title}" будет удалён без возможности восстановления.`,
+            confirmText: "Удалить",
+            cancelText: "Отмена",
+            danger: true
+          });
           if (!confirmDelete) {
             return;
           }
@@ -361,7 +426,13 @@
       const info = document.createElement("p");
       info.className = "muted";
       info.appendChild(createUserLinkNode(track.username, "user-link compact-link"));
-      info.append(` • 👍 ${track.likesCount} • 👂 ${track.listensCount || 0} • ${t("labelGenre").toLowerCase()}: ${track.genre || "-"}`);
+      info.append(
+        document.createTextNode(" • "),
+        createInlineStat("like", String(track.likesCount)),
+        document.createTextNode(" • "),
+        createInlineStat("listen", String(track.listensCount || 0)),
+        document.createTextNode(` • ${t("labelGenre").toLowerCase()}: ${track.genre || "-"}`)
+      );
       const player = buildAudioPlayer(track, source);
       card.append(title, info, player);
       return card;
@@ -516,7 +587,13 @@
       }
     }
     async function deleteTrack(track) {
-      const confirmed = window.confirm(`Удалить трек "${track.title}"? Это действие нельзя отменить.`);
+      const confirmed = await confirmDialog({
+        title: "Удалить трек?",
+        message: `Трек "${track.title}" будет удалён без возможности восстановления.`,
+        confirmText: "Удалить",
+        cancelText: "Отмена",
+        danger: true
+      });
       if (!confirmed) {
         return;
       }
@@ -535,18 +612,122 @@
         setStatus(error.message, "error");
       }
     }
+
+    async function reportTrack(track) {
+      if (!state.user) {
+        setStatus("Войди в аккаунт, чтобы отправить жалобу.", "error");
+        return;
+      }
+
+      const itemLabel = track.kind === "beat" ? "бит" : "трек";
+      const reasonInput = await promptDialog({
+        title: `Жалоба на ${itemLabel}`,
+        message: "Кратко укажи причину обращения.",
+        value: "Спам / нарушение правил",
+        placeholder: "Причина жалобы",
+        confirmText: "Отправить"
+      });
+      if (reasonInput === null) {
+        return;
+      }
+
+      const reason = String(reasonInput || "").trim();
+      if (reason.length < 3) {
+        setStatus("Укажи причину жалобы хотя бы в нескольких словах.", "error");
+        return;
+      }
+
+      const detailsInput = await promptDialog({
+        title: "Дополнительные детали",
+        message: "Если нужно, добавь контекст для администраторов.",
+        value: "",
+        placeholder: "Подробности жалобы",
+        multiline: true,
+        confirmText: "Продолжить"
+      });
+      const details = detailsInput === null ? "" : String(detailsInput || "").trim();
+
+      try {
+        setStatus(`Отправляю жалобу на ${itemLabel}...`);
+        await api("/api/reports", {
+          method: "POST",
+          body: {
+            targetType: "track",
+            targetId: track.id,
+            reason,
+            details
+          }
+        });
+        setStatus(`Жалоба на ${itemLabel} отправлена администраторам.`, "success");
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    }
+
     function buildTrackEditForm(track) {
       const wrapper = document.createElement("div");
       const toggle = document.createElement("button");
       toggle.type = "button";
       toggle.className = "ghost";
-      toggle.textContent = "Редактировать трек";
+      const adminMode = Boolean(state.user?.isAdmin) && !track.isOwner;
+      const isBeat = isBeatTrack(track);
+      const itemLabel = isBeat ? "бит" : "трек";
+      toggle.textContent = adminMode ? `Админ: редактировать ${itemLabel}` : `Редактировать ${itemLabel}`;
       const form = document.createElement("form");
       form.className = "edit-form hidden";
-      const sharePath = track.sharePath || `/t/${encodeURIComponent(track.id)}`;
+      const sharePath = track.sharePath || `/${isBeat ? "b" : "t"}/${encodeURIComponent(track.id)}`;
       const shareLink = `${window.location.origin}${sharePath}`;
       const premiereValue = toLocalDateTimeInputValue(track.premiereAt);
+      const beatLicenses = isBeat ? normalizeBeatLicenses(track.beatLicenses) : [];
+      const beatLicenseMap = new Map(beatLicenses.map((license) => [license.type, license]));
+      const beatCurrency = String(beatLicenses[0]?.currency || "RUB").toUpperCase() === "USD" ? "USD" : "RUB";
+      const buildBeatLicenseRow = (type, label) => {
+        const existing = beatLicenseMap.get(type);
+        const checked = existing ? " checked" : "";
+        const priceValue = existing ? ` value="${escapeHtml(String(existing.price))}"` : "";
+        return `
+          <label class="beat-license-row">
+            <input name="beatLicense${type}Enabled" type="checkbox"${checked} />
+            <span>${label}</span>
+            <input name="beatLicense${type}Price" type="number" min="0" step="1" placeholder="${escapeHtml(t("beatPricePlaceholder"))}"${priceValue} />
+          </label>
+        `;
+      };
+      const beatMetaFields = isBeat ? `
+        <div class="sub-grid">
+          <label>
+            BPM
+            <input name="bpm" type="number" min="1" max="400" step="1" required value="${escapeHtml(String(track.beatBpm || ""))}" />
+          </label>
+          <label>
+            Корневая нота
+            <input name="rootNote" type="text" maxlength="12" required value="${escapeHtml(String(track.beatRootNote || ""))}" />
+          </label>
+        </div>
+      ` : "";
+      const beatLicensesMarkup = isBeat ? `
+        <div class="beat-license-block">
+          <div class="beat-license-head">
+            <strong>${escapeHtml(t("beatLicensesTitle"))}</strong>
+            <label class="beat-currency-inline">
+              ${escapeHtml(t("beatLicenseCurrency"))}
+              <select name="beatLicenseCurrency">
+                <option value="RUB"${beatCurrency === "RUB" ? " selected" : ""}>RUB ₽</option>
+                <option value="USD"${beatCurrency === "USD" ? " selected" : ""}>USD $</option>
+              </select>
+            </label>
+          </div>
+          ${buildBeatLicenseRow("mp3", "MP3 Lease")}
+          ${buildBeatLicenseRow("wav", "WAV Lease")}
+          ${buildBeatLicenseRow("trackout", "Trackout")}
+          ${buildBeatLicenseRow("exclusive", "Exclusive")}
+        </div>
+      ` : "";
+      const adminNote = adminMode
+        ? `<p class="muted">Администратор редактирует чужой ${itemLabel}. Доступны название, описание, обложка, аудио и остальные основные поля.</p>`
+        : "";
       form.innerHTML = `
+        ${adminNote}
         <label>
           Название
           <input name="title" type="text" maxlength="120" required value="${escapeHtml(track.title)}" />
@@ -555,6 +736,7 @@
           Жанр
           <input name="genre" type="text" maxlength="60" required value="${escapeHtml(track.genre || "")}" />
         </label>
+        ${beatMetaFields}
         <label>
           Режим публикации
           <select name="publishMode" required>
@@ -585,15 +767,24 @@
           Описание
           <textarea name="description" rows="4" maxlength="1000">${escapeHtml(track.description || "")}</textarea>
         </label>
+        ${isBeat ? "" : `
+        <label class="admin-filter-field">
+          <span>
+            <input name="isExplicit" type="checkbox" ${track.isExplicit ? "checked" : ""} />
+            Метка E: в треке есть нецензурная лексика
+          </span>
+        </label>
+        `}
+        ${beatLicensesMarkup}
         <label>
-          Новая обложка (PNG/JPG)
-          <input name="cover" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+          Новая обложка (PNG/JPG/GIF)
+          <input name="cover" type="file" accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif" />
         </label>
         <label>
           Новый аудиофайл (MP3 до 15 МБ, WAV до 30 МБ)
           <input name="audio" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" />
         </label>
-        <p class="muted">Ссылка на трек: <a class="user-link" href="${escapeHtml(sharePath)}" target="_blank" rel="noopener">${escapeHtml(shareLink)}</a></p>
+        <p class="muted">Ссылка на ${itemLabel}: <a class="user-link" href="${escapeHtml(sharePath)}" target="_blank" rel="noopener">${escapeHtml(shareLink)}</a></p>
         <button type="submit">Сохранить изменения</button>
       `;
       const publishModeSelect = form.querySelector("select[name='publishMode']");
@@ -624,9 +815,53 @@
         const description = String(rawFormData.get("description") || "").trim();
         const genre = String(rawFormData.get("genre") || "").trim();
         const publishMode = String(rawFormData.get("publishMode") || "public").trim().toLowerCase();
-        const authors = parseCommaList(rawFormData.get("authors"), 10);
-        const producers = parseCommaList(rawFormData.get("producers"), 10);
+        const authors = parseCommaList(rawFormData.get("authors"), 100);
+        const producers = parseCommaList(rawFormData.get("producers"), 100);
         const hashtags = parseCommaList(rawFormData.get("hashtags"), 5, normalizeTag);
+        const collectBeatLicensesFromEditForm = () => {
+          const currency = String(form.querySelector("[name='beatLicenseCurrency']")?.value || "RUB").toUpperCase() === "USD" ? "USD" : "RUB";
+          const candidates = [
+            {
+              type: "mp3",
+              enabled: form.querySelector("[name='beatLicensemp3Enabled']")?.checked,
+              price: form.querySelector("[name='beatLicensemp3Price']")?.value
+            },
+            {
+              type: "wav",
+              enabled: form.querySelector("[name='beatLicensewavEnabled']")?.checked,
+              price: form.querySelector("[name='beatLicensewavPrice']")?.value
+            },
+            {
+              type: "trackout",
+              enabled: form.querySelector("[name='beatLicensetrackoutEnabled']")?.checked,
+              price: form.querySelector("[name='beatLicensetrackoutPrice']")?.value
+            },
+            {
+              type: "exclusive",
+              enabled: form.querySelector("[name='beatLicenseexclusiveEnabled']")?.checked,
+              price: form.querySelector("[name='beatLicenseexclusivePrice']")?.value
+            }
+          ];
+          const result = [];
+          for (const item of candidates) {
+            if (!item.enabled) {
+              continue;
+            }
+            const price = Number(item.price);
+            if (!Number.isFinite(price) || price < 0) {
+              throw new Error(`Укажи корректную цену для лицензии ${getBeatLicenseTypeLabel(item.type)}`);
+            }
+            result.push({
+              type: item.type,
+              price: Math.round(price),
+              currency
+            });
+          }
+          if (result.length === 0) {
+            throw new Error("Выбери хотя бы одну лицензию для бита");
+          }
+          return result;
+        };
         const premiereAtIso = publishMode === "premiere"
           ? parseLocalDateTimeToIso(String(rawFormData.get("premiereAt") || ""))
           : null;
@@ -636,9 +871,24 @@
         requestData.append("genre", genre);
         requestData.append("publishMode", publishMode);
         requestData.append("premiereAt", premiereAtIso || "");
+        requestData.append("isExplicit", !isBeat && rawFormData.get("isExplicit") ? "true" : "false");
         requestData.append("authors", authors.join(", "));
         requestData.append("producers", producers.join(", "));
         requestData.append("hashtags", hashtags.join(", "));
+        if (isBeat) {
+          const bpm = Number(rawFormData.get("bpm"));
+          const rootNote = String(rawFormData.get("rootNote") || "").trim();
+          if (!Number.isFinite(bpm) || bpm <= 0 || bpm > 400) {
+            throw new Error("BPM должен быть от 1 до 400");
+          }
+          if (!rootNote) {
+            throw new Error("Укажи корневую ноту бита");
+          }
+          const licenses = collectBeatLicensesFromEditForm();
+          requestData.append("bpm", String(Math.round(bpm)));
+          requestData.append("rootNote", rootNote);
+          requestData.append("beatLicenses", JSON.stringify(licenses));
+        }
         const coverFile = rawFormData.get("cover");
         const audioFile = rawFormData.get("audio");
         if (coverFile instanceof File && coverFile.size > 0) {
@@ -653,7 +903,7 @@
           requestData.append("audio", preparedAudio.file, preparedAudio.fileName);
         }
         try {
-          setStatus("Сохраняю изменения трека...");
+          setStatus(`Сохраняю изменения ${itemLabel}...`);
           await api(`/api/tracks/${track.id}`, {
             method: "PUT",
             body: requestData
@@ -662,7 +912,7 @@
           await refreshAlbums();
           await refreshPlaylists();
           renderAll();
-          setStatus("Трек обновлен", "success");
+          setStatus(`${itemLabel === "бит" ? "Бит" : "Трек"} обновлен`, "success");
         } catch (error) {
           setStatus(error.message, "error");
         }
@@ -706,7 +956,11 @@
         await navigator.clipboard.writeText(url);
         setStatus(t("statusLinkCopied"), "success");
       } catch {
-        window.prompt(t("promptCopyLink"), url);
+        await copyDialog({
+          title: t("promptCopyLink"),
+          message: "Скопируй ссылку вручную, если браузер не дал доступ к буферу.",
+          value: url
+        });
       }
     }
     async function shareTrackLink(track, fallbackPath) {
@@ -984,7 +1238,7 @@
       const meta = document.createElement("div");
       meta.className = "track-meta";
       meta.innerHTML = `
-        <span><a class="user-link" href="${escapeHtml(buildUserHref(track.username))}">@${escapeHtml(track.username)}</a></span>
+        <span><a class="user-link" href="${escapeHtml(buildUserHref(track.username))}" target="_blank" rel="noopener noreferrer">@${escapeHtml(track.username)}</a></span>
         <span>BPM: ${escapeHtml(String(track.beatBpm || "-"))}</span>
         <span>${escapeHtml(t("labelBeatRootNote"))}: ${escapeHtml(String(track.beatRootNote || "-"))}</span>
         <span>${escapeHtml(t("labelStyle"))}: ${escapeHtml(track.genre || "Beat")}</span>
@@ -992,7 +1246,10 @@
         <span>${escapeHtml(t("labelPublished"))}: ${escapeHtml(formatDate(track.createdAt))}</span>
       `;
       const audioPlayer = buildAudioPlayer(track, source);
-      const editFormWrap = track.isOwner ? buildTrackEditForm(track) : null;
+      const adminCanManageTrack = Boolean(state.user?.isAdmin) && !track.isOwner;
+      const editFormWrap = track.isOwner
+        ? buildTrackEditForm(track)
+        : (adminCanManageTrack ? buildTrackEditForm(track) : null);
       const toggleEditForm = () => {
         const form = editFormWrap?.querySelector("form");
         if (form) {
@@ -1001,41 +1258,26 @@
       };
       const actionItems = [
         {
-          label: t("btnOpen"),
-          onSelect: () => {
-            window.location.href = track.sharePath || `/b/${encodeURIComponent(track.id)}`;
-          }
-        },
-        {
-          label: `${t("actionLike")} (${track.likesCount})`,
-          disabled: !state.user,
-          onSelect: () => toggleTrackReaction(track.id, "like")
-        },
-        {
-          label: `${t("actionDislike")} (${track.dislikesCount})`,
-          disabled: !state.user,
-          onSelect: () => toggleTrackReaction(track.id, "dislike")
-        },
-        {
           label: t("btnCopyLink"),
           onSelect: async () => {
             await copyTrackShareLink(track, `/b/${encodeURIComponent(track.id)}`);
           }
-        },
-        {
-          label: t("btnShareLink"),
-          onSelect: async () => {
-            await shareTrackLink(track, `/b/${encodeURIComponent(track.id)}`);
-          }
         }
       ];
-      if (track.isOwner) {
+      if (!track.isOwner) {
         actionItems.push({
-          label: t("actionEditTrack"),
+          label: "Пожаловаться",
+          disabled: !state.user,
+          onSelect: () => reportTrack(track)
+        });
+      }
+      if (track.isOwner || adminCanManageTrack) {
+        actionItems.push({
+          label: track.isOwner ? t("actionEditBeat") : "Админ: редактировать бит",
           onSelect: toggleEditForm
         });
         actionItems.push({
-          label: t("btnDeleteBeat"),
+          label: track.isOwner ? t("btnDeleteBeat") : "Админ: удалить бит",
           danger: true,
           onSelect: () => deleteTrack(track)
         });
@@ -1044,37 +1286,41 @@
       const quickActions = document.createElement("div");
       quickActions.className = "track-actions beat-primary-actions";
 
-      const quickPlayBtn = document.createElement("button");
-      quickPlayBtn.type = "button";
-      quickPlayBtn.className = "ghost";
-      quickPlayBtn.textContent = t("btnListen");
-      quickPlayBtn.addEventListener("click", async () => {
-        const queue = Array.from(card.parentElement?.querySelectorAll(".track-card[data-track-id]") || [])
-          .map((node) => node.dataset.trackId)
-          .filter(Boolean);
-        await startTrackPlayback(track.id, queue, card, source);
+      const likeMetricBtn = createTrackMetricButton({
+        iconName: "like",
+        count: track.likesCount,
+        active: Boolean(track.liked),
+        label: t("actionLike"),
+        disabled: !state.user,
+        onClick: async () => {
+          await toggleTrackReaction(track.id, "like");
+        }
       });
-      quickActions.appendChild(quickPlayBtn);
+      quickActions.appendChild(likeMetricBtn);
 
-      const quickLikeBtn = document.createElement("button");
-      quickLikeBtn.type = "button";
-      quickLikeBtn.className = "ghost";
-      quickLikeBtn.textContent = `👍 ${track.likesCount}`;
-      quickLikeBtn.disabled = !state.user;
-      quickLikeBtn.addEventListener("click", async () => {
-        await toggleTrackReaction(track.id, "like");
+      const dislikeMetricBtn = createTrackMetricButton({
+        iconName: "dislike",
+        count: track.dislikesCount,
+        active: Boolean(track.disliked),
+        label: t("actionDislike"),
+        disabled: !state.user,
+        onClick: async () => {
+          await toggleTrackReaction(track.id, "dislike");
+        }
       });
-      quickActions.appendChild(quickLikeBtn);
+      quickActions.appendChild(dislikeMetricBtn);
 
-      const quickDislikeBtn = document.createElement("button");
-      quickDislikeBtn.type = "button";
-      quickDislikeBtn.className = "ghost";
-      quickDislikeBtn.textContent = `👎 ${track.dislikesCount}`;
-      quickDislikeBtn.disabled = !state.user;
-      quickDislikeBtn.addEventListener("click", async () => {
-        await toggleTrackReaction(track.id, "dislike");
+      const repostMetricBtn = createTrackMetricButton({
+        iconName: "repost",
+        count: track.repostsCount,
+        active: Boolean(track.reposted),
+        label: t("actionRepost"),
+        disabled: !state.user,
+        onClick: async () => {
+          await toggleTrackRepost(track.id);
+        }
       });
-      quickActions.appendChild(quickDislikeBtn);
+      quickActions.appendChild(repostMetricBtn);
 
       const quickMessageBtn = document.createElement("button");
       quickMessageBtn.type = "button";
@@ -1090,7 +1336,7 @@
         const quickEditBtn = document.createElement("button");
         quickEditBtn.type = "button";
         quickEditBtn.className = "ghost";
-        quickEditBtn.textContent = t("actionEditTrack");
+        quickEditBtn.textContent = t("actionEditBeat");
         quickEditBtn.addEventListener("click", toggleEditForm);
         quickActions.appendChild(quickEditBtn);
       }
@@ -1180,10 +1426,14 @@
         commentsBody.appendChild(commentForm);
       }
 
-      const quickCommentsBtn = document.createElement("button");
-      quickCommentsBtn.type = "button";
-      quickCommentsBtn.className = "ghost";
-      quickCommentsBtn.textContent = `💬 ${track.commentsCount}`;
+      const quickCommentsBtn = createTrackMetricButton({
+        iconName: "comment",
+        count: track.commentsCount,
+        label: t("commentsTitle"),
+        onClick: () => {
+          toggleComments();
+        }
+      });
       quickActions.appendChild(quickCommentsBtn);
 
       const syncCommentsVisibility = () => {
@@ -1196,7 +1446,6 @@
         syncCommentsVisibility();
       };
       commentsToggleBtn.addEventListener("click", toggleComments);
-      quickCommentsBtn.addEventListener("click", toggleComments);
       syncCommentsVisibility();
 
       main.append(title, audioPlayer, meta, licensesWrap, quickActions, actions, detailsWrap, commentsWrap);
@@ -1238,7 +1487,7 @@
       const meta = document.createElement("div");
       meta.className = "track-meta";
       meta.innerHTML = `
-        <span><a class="user-link" href="${escapeHtml(buildUserHref(track.username))}">@${escapeHtml(track.username)}</a></span>
+        <span><a class="user-link" href="${escapeHtml(buildUserHref(track.username))}" target="_blank" rel="noopener noreferrer">@${escapeHtml(track.username)}</a></span>
         <span>${escapeHtml(t("labelGenre"))}: ${escapeHtml(track.genre || "-")}</span>
         <span>${escapeHtml(t("labelAuthors"))}: ${escapeHtml((track.authors || []).join(", ") || "-")}</span>
         <span>${escapeHtml(t("labelProducers"))}: ${escapeHtml((track.producers || []).join(", ") || "-")}</span>
@@ -1246,42 +1495,25 @@
         <span>${escapeHtml(t("labelPublished"))}: ${escapeHtml(formatDate(track.createdAt))}</span>
       `;
       const audioPlayer = buildAudioPlayer(track, source);
-      const editFormWrap = track.isOwner ? buildTrackEditForm(track) : null;
+      const adminCanManageTrack = Boolean(state.user?.isAdmin) && !track.isOwner;
+      const editFormWrap = track.isOwner
+        ? buildTrackEditForm(track)
+        : (adminCanManageTrack ? buildTrackEditForm(track) : null);
       const actionItems = [
-        {
-          label: t("btnOpen"),
-          onSelect: () => {
-            window.location.href = track.sharePath || `/t/${encodeURIComponent(track.id)}`;
-          }
-        },
-        {
-          label: `${t("actionLike")} (${track.likesCount})`,
-          disabled: !state.user,
-          onSelect: () => toggleTrackReaction(track.id, "like")
-        },
-        {
-          label: `${t("actionDislike")} (${track.dislikesCount})`,
-          disabled: !state.user,
-          onSelect: () => toggleTrackReaction(track.id, "dislike")
-        },
-        {
-          label: `${t("actionRepost")} (${track.repostsCount})`,
-          disabled: !state.user,
-          onSelect: () => toggleTrackRepost(track.id)
-        },
         {
           label: t("btnCopyLink"),
           onSelect: async () => {
             await copyTrackShareLink(track, `/t/${encodeURIComponent(track.id)}`);
           }
-        },
-        {
-          label: t("btnShareLink"),
-          onSelect: async () => {
-            await shareTrackLink(track, `/t/${encodeURIComponent(track.id)}`);
-          }
         }
       ];
+      if (!track.isOwner) {
+        actionItems.push({
+          label: "Пожаловаться",
+          disabled: !state.user,
+          onSelect: () => reportTrack(track)
+        });
+      }
       if (track.isOwner) {
         if (!isBeatTrack(track)) {
           actionItems.push({
@@ -1303,8 +1535,66 @@
           danger: true,
           onSelect: () => deleteTrack(track)
         });
+      } else if (adminCanManageTrack) {
+        actionItems.push({
+          label: "Админ: редактировать трек",
+          onSelect: () => {
+            const form = editFormWrap?.querySelector("form");
+            if (form) {
+              form.classList.toggle("hidden");
+            }
+          }
+        });
+        actionItems.push({
+          label: "Админ: удалить трек",
+          danger: true,
+          onSelect: () => deleteTrack(track)
+        });
       }
       const actions = createActionMenu(actionItems);
+      const quickActions = document.createElement("div");
+      quickActions.className = "track-actions track-primary-actions";
+
+      quickActions.appendChild(createTrackMetricButton({
+        iconName: "like",
+        count: track.likesCount,
+        active: Boolean(track.liked),
+        label: t("actionLike"),
+        disabled: !state.user,
+        onClick: async () => {
+          await toggleTrackReaction(track.id, "like");
+        }
+      }));
+
+      quickActions.appendChild(createTrackMetricButton({
+        iconName: "dislike",
+        count: track.dislikesCount,
+        active: Boolean(track.disliked),
+        label: t("actionDislike"),
+        disabled: !state.user,
+        onClick: async () => {
+          await toggleTrackReaction(track.id, "dislike");
+        }
+      }));
+
+      quickActions.appendChild(createTrackMetricButton({
+        iconName: "repost",
+        count: track.repostsCount,
+        active: Boolean(track.reposted),
+        label: t("actionRepost"),
+        disabled: !state.user,
+        onClick: async () => {
+          await toggleTrackRepost(track.id);
+        }
+      }));
+
+      const quickCommentsBtn = createTrackMetricButton({
+        iconName: "comment",
+        count: track.commentsCount,
+        label: t("commentsTitle")
+      });
+      quickActions.appendChild(quickCommentsBtn);
+
       const playlistAdder = buildPlaylistAdder(track);
       const detailsWrap = document.createElement("div");
       detailsWrap.className = "track-secondary";
@@ -1366,7 +1656,16 @@
         commentsBody.appendChild(commentForm);
       }
       commentsWrap.appendChild(commentsBody);
-      main.append(title, privacyChip, audioPlayer, actions, detailsBtn, detailsWrap);
+      quickCommentsBtn.addEventListener("click", () => {
+        if (!state.commentsCollapsedMap) {
+          state.commentsCollapsedMap = {};
+        }
+        const nextCollapsed = !Boolean(state.commentsCollapsedMap[track.id]);
+        state.commentsCollapsedMap[track.id] = nextCollapsed;
+        commentsBody.classList.toggle("hidden", nextCollapsed);
+        commentsToggleBtn.textContent = nextCollapsed ? t("commentsToggleShow") : t("commentsToggleHide");
+      });
+      main.append(title, privacyChip, audioPlayer, quickActions, actions, detailsBtn, detailsWrap);
       if (playlistAdder) {
         main.appendChild(playlistAdder);
       }

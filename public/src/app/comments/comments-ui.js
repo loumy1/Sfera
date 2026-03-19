@@ -5,6 +5,14 @@
     const { state, deps = {} } = ctx || {};
     const { setStatus, api, refreshTracks, renderAll, formatDate, setImageWithFallback } = deps;
 
+        function promptDialog(options) {
+          return window.SferaDialogs.prompt(options);
+        }
+
+        function confirmDialog(options) {
+          return window.SferaDialogs.confirm(options);
+        }
+
         async function createComment(trackId, text, parentCommentId = null) {
           try {
             await api(`/api/tracks/${trackId}/comments`, {
@@ -22,7 +30,13 @@
           }
         }
         async function deleteComment(trackId, commentId) {
-          const confirmed = window.confirm("Удалить этот комментарий?");
+          const confirmed = await confirmDialog({
+            title: "Удалить комментарий?",
+            message: "Комментарий будет удалён без возможности восстановления.",
+            confirmText: "Удалить",
+            cancelText: "Отмена",
+            danger: true
+          });
           if (!confirmed) {
             return;
           }
@@ -46,6 +60,60 @@
             await refreshTracks();
             renderAll();
             setStatus("Реакция на комментарий обновлена", "success");
+          } catch (error) {
+            setStatus(error.message, "error");
+          }
+        }
+        async function reportComment(trackId, comment) {
+          if (!state.user) {
+            setStatus("Войди в аккаунт, чтобы отправить жалобу.", "error");
+            return;
+          }
+          if (!comment || !comment.id) {
+            setStatus("Комментарий не найден", "error");
+            return;
+          }
+
+          const reasonInput = await promptDialog({
+            title: "Жалоба на комментарий",
+            message: "Кратко укажи причину жалобы.",
+            value: "Оскорбление / спам / нарушение правил",
+            placeholder: "Причина жалобы",
+            confirmText: "Отправить"
+          });
+          if (reasonInput === null) {
+            return;
+          }
+
+          const reason = String(reasonInput || "").trim();
+          if (reason.length < 3) {
+            setStatus("Укажи причину жалобы хотя бы в нескольких словах.", "error");
+            return;
+          }
+
+          const detailsInput = await promptDialog({
+            title: "Дополнительные детали",
+            message: "Если нужно, добавь контекст для администраторов.",
+            value: "",
+            placeholder: "Подробности жалобы",
+            multiline: true,
+            confirmText: "Продолжить"
+          });
+          const details = detailsInput === null ? "" : String(detailsInput || "").trim();
+
+          try {
+            setStatus("Отправляю жалобу на комментарий...");
+            await api("/api/reports", {
+              method: "POST",
+              body: {
+                targetType: "comment",
+                targetId: comment.id,
+                trackId,
+                reason,
+                details
+              }
+            });
+            setStatus("Жалоба на комментарий отправлена администраторам.", "success");
           } catch (error) {
             setStatus(error.message, "error");
           }
@@ -100,6 +168,16 @@
           dislikeBtn.disabled = !state.user;
           dislikeBtn.addEventListener("click", () => toggleCommentReaction(trackId, comment.id, "dislike"));
           actions.append(likeBtn, dislikeBtn);
+          if (state.user && state.user.id !== comment.userId) {
+            const reportBtn = document.createElement("button");
+            reportBtn.type = "button";
+            reportBtn.className = "ghost";
+            reportBtn.textContent = "Пожаловаться";
+            reportBtn.addEventListener("click", () => {
+              reportComment(trackId, comment);
+            });
+            actions.appendChild(reportBtn);
+          }
           if (state.user && comment.canDelete) {
             const deleteBtn = document.createElement("button");
             deleteBtn.type = "button";

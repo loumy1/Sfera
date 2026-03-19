@@ -4,17 +4,65 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>sfera • Профиль</title>
-    <link rel="stylesheet" href="/styles.css?v=20260301-guest-uk1" />
+    <script>
+      (() => {
+        try {
+          if (window.sessionStorage.getItem("sfera_intro_seen_v2") === "1") {
+            document.documentElement.classList.add("site-intro-skip");
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20260311-favicon2" />
+    <link rel="stylesheet" href="/styles.css?v=20260319-queuefix1" />
   </head>
   <body class="public-page">
+    <div id="siteIntroOverlay" class="site-intro-overlay" aria-hidden="true">
+      <div class="site-intro-shell">
+        <span class="site-intro-halo" aria-hidden="true"></span>
+        <div class="site-intro-orbits" aria-hidden="true">
+          <span class="site-intro-orbit site-intro-orbit-a"></span>
+          <span class="site-intro-orbit site-intro-orbit-b"></span>
+          <span class="site-intro-orbit site-intro-orbit-c"></span>
+        </div>
+        <div class="site-intro-stage" aria-hidden="true">
+          <span class="site-intro-stage-line"></span>
+          <span class="site-intro-stage-core"></span>
+        </div>
+        <div class="site-intro-logo" data-brand="sfera">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="brand-mark-orbit brand-mark-orbit-a"></span>
+            <span class="brand-mark-orbit brand-mark-orbit-b"></span>
+            <span class="brand-mark-core"></span>
+            <span class="brand-mark-glint"></span>
+          </span>
+          <span class="brand-logo-text" data-brand="sfera">sfera</span>
+        </div>
+        <div class="site-intro-eq" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <span class="site-intro-sr-only">Загрузка сайта sfera</span>
+    </div>
     <header class="topbar">
       <div class="container topbar-inner">
         <div class="brand-wrap">
-          <h1><a class="brand-logo" href="/#feed" data-brand="sfera">sfera</a></h1>
+          <h1>
+            <a class="brand-logo" href="/#feed" data-brand="sfera">
+              <span class="brand-mark" aria-hidden="true">
+                <span class="brand-mark-orbit brand-mark-orbit-a"></span>
+                <span class="brand-mark-orbit brand-mark-orbit-b"></span>
+                <span class="brand-mark-core"></span>
+                <span class="brand-mark-glint"></span>
+              </span>
+              <span class="brand-logo-text" data-brand="sfera">sfera</span>
+            </a>
+          </h1>
           <p class="brand-beta">beta-test</p>
         </div>
         <div class="topbar-right">
-          <div id="onlineCounter" class="online-pill">Онлайн: 0</div>
           <nav class="tabs-nav">
             <a class="tab-btn" href="/">На главную</a>
           </nav>
@@ -40,6 +88,8 @@
             </div>
             <div id="publicProfileActions" class="track-actions profile-hero-actions"></div>
           </div>
+
+          <section id="publicAdminPanel" class="card public-admin-panel hidden"></section>
 
           <div class="profile-toolbar">
             <div class="profile-tabs" role="tablist" aria-label="Разделы профиля">
@@ -123,7 +173,9 @@
             <h3 id="publicMessagesModalTitle">Диалог</h3>
             <p id="publicMessagesModalSubtitle" class="muted">Личная переписка</p>
           </div>
-          <button id="publicMessagesModalCloseBtn" class="ghost messages-modal-close" type="button" aria-label="Закрыть окно сообщений">✕</button>
+          <button id="publicMessagesModalCloseBtn" class="ghost messages-modal-close sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Закрыть окно сообщений">
+            <span class="sf-icon sf-icon--sm" data-icon="close" aria-hidden="true"></span>
+          </button>
         </div>
         <div id="publicMessagesModalChatList" class="chat-list messages-modal-chat-list"></div>
         <form id="publicMessagesModalSendForm" class="message-form messages-modal-form">
@@ -145,14 +197,14 @@
         </div>
 
         <div class="player-controls">
-          <button id="playerPrevBtn" class="ghost" type="button" aria-label="Предыдущий трек">⏮</button>
-          <button id="playerPlayBtn" class="ghost" type="button" aria-label="Воспроизвести">▶</button>
-          <button id="playerPauseBtn" class="ghost" type="button" aria-label="Пауза">⏸</button>
-          <button id="playerStopBtn" class="ghost" type="button" aria-label="Остановить">⏹</button>
-          <button id="playerNextBtn" class="ghost" type="button" aria-label="Следующий трек">⏭</button>
-          <button id="playerShuffleBtn" class="ghost" type="button" aria-label="Перемешать">🔀</button>
-          <button id="playerRepeatAllBtn" class="ghost" type="button" aria-label="Повтор списка">🔁</button>
-          <button id="playerRepeatOneBtn" class="ghost" type="button" aria-label="Повтор одного трека">🔂</button>
+          <button id="playerPrevBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Предыдущий трек"><span class="sf-icon sf-icon--sm" data-icon="prev" aria-hidden="true"></span></button>
+          <button id="playerPlayBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Воспроизвести"><span class="sf-icon sf-icon--sm" data-icon="play" aria-hidden="true"></span></button>
+          <button id="playerPauseBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Пауза"><span class="sf-icon sf-icon--sm" data-icon="pause" aria-hidden="true"></span></button>
+          <button id="playerStopBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Остановить"><span class="sf-icon sf-icon--sm" data-icon="stop" aria-hidden="true"></span></button>
+          <button id="playerNextBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Следующий трек"><span class="sf-icon sf-icon--sm" data-icon="next" aria-hidden="true"></span></button>
+          <button id="playerShuffleBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Перемешать"><span class="sf-icon sf-icon--sm" data-icon="shuffle" aria-hidden="true"></span></button>
+          <button id="playerRepeatAllBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Повтор списка"><span class="sf-icon sf-icon--sm" data-icon="repeat" aria-hidden="true"></span></button>
+          <button id="playerRepeatOneBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Повтор одного трека"><span class="sf-icon sf-icon--sm" data-icon="repeat-one" aria-hidden="true"></span></button>
         </div>
 
         <label class="player-volume">
@@ -169,6 +221,9 @@
       <audio id="globalPlayerAudio" preload="metadata"></audio>
     </section>
 
-    <script src="/public-profile.js?v=20260301-guest-uk1"></script>
+    <script src="/src/app/ui/icon-kit.js?v=20260313-publishicons1"></script>
+    <script src="/src/app/ui/dialogs.js?v=20260316-dialogs1"></script>
+    <script src="/public-profile.js?v=20260319-explicit1"></script>
+    <script src="/src/app/ui/intro-overlay.js?v=20260314-intro2"></script>
   </body>
 </html>

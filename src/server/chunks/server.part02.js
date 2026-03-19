@@ -252,11 +252,341 @@ function canListTrack(track, currentUserId) {
   return track.publishMode !== "link";
 }
 
+function validateOptionalUrlField(value, { fieldName, maxLength = 1000, allowedHosts = null } = {}) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  if (raw.length > maxLength) {
+    throw new HttpError(400, `${fieldName} слишком длинный`);
+  }
+
+  let url = null;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new HttpError(400, `${fieldName}: некорректный URL`);
+  }
+
+  const protocol = String(url.protocol || "").toLowerCase();
+  if (protocol !== "http:" && protocol !== "https:") {
+    throw new HttpError(400, `${fieldName}: поддерживаются только http/https`);
+  }
+
+  if (allowedHosts && allowedHosts.size > 0) {
+    const host = String(url.hostname || "").toLowerCase();
+    if (!allowedHosts.has(host)) {
+      throw new HttpError(400, `${fieldName}: разрешены только ссылки ${Array.from(allowedHosts).join(", ")}`);
+    }
+  }
+
+  return url.toString();
+}
+
+function parseLyricsTimestampToMs(minutesRaw, secondsRaw, fractionRaw = "") {
+  const minutes = Number(minutesRaw);
+  const seconds = Number(secondsRaw);
+  if (!Number.isFinite(minutes) || minutes < 0 || !Number.isFinite(seconds) || seconds < 0 || seconds >= 60) {
+    return null;
+  }
+
+  let milliseconds = 0;
+  const fraction = String(fractionRaw || "").trim();
+  if (fraction) {
+    if (!/^\d{1,3}$/.test(fraction)) {
+      return null;
+    }
+    if (fraction.length === 1) {
+      milliseconds = Number(fraction) * 100;
+    } else if (fraction.length === 2) {
+      milliseconds = Number(fraction) * 10;
+    } else {
+      milliseconds = Number(fraction);
+    }
+  }
+
+  return Math.max(0, Math.round(minutes * 60 * 1000 + seconds * 1000 + milliseconds));
+}
+
+function parseLyricsTimeToken(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?$/);
+  if (!match) {
+    return null;
+  }
+  return parseLyricsTimestampToMs(match[1], match[2], match[3] || "");
+}
+
+function estimateLyricsSegmentDurationMs(text) {
+  const wordsCount = String(text || "").trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(1200, Math.min(8000, Math.max(1, wordsCount) * 420));
+}
+
+function normalizeLyricsWords(rawWords) {
+  if (!Array.isArray(rawWords)) {
+    return [];
+  }
+
+  const words = [];
+  for (const rawWord of rawWords) {
+    if (!rawWord || typeof rawWord !== "object") {
+      continue;
+    }
+
+    const text = String(rawWord.text ?? rawWord.word ?? rawWord.value ?? "").trim();
+    const startCandidate = rawWord.startMs ?? rawWord.start ?? rawWord.time ?? rawWord.offsetMs;
+    const endCandidate = rawWord.endMs ?? rawWord.end ?? rawWord.timeEnd ?? rawWord.durationEndMs;
+    const startMs = Number(startCandidate);
+    const endMs = endCandidate === undefined || endCandidate === null || String(endCandidate).trim?.() === ""
+      ? null
+      : Number(endCandidate);
+
+    if (!text || !Number.isFinite(startMs) || startMs < 0) {
+      continue;
+    }
+
+    words.push({
+      text,
+      startMs: Math.round(startMs),
+      endMs: Number.isFinite(endMs) && endMs >= startMs ? Math.round(endMs) : null
+    });
+  }
+
+  words.sort((left, right) => left.startMs - right.startMs);
+  return words;
+}
+
+function finalizeLyricsSegments(segments) {
+  const prepared = Array.isArray(segments) ? segments.filter(Boolean) : [];
+  prepared.sort((left, right) => left.startMs - right.startMs);
+
+  const result = [];
+  for (let index = 0; index < prepared.length; index += 1) {
+    const rawSegment = prepared[index];
+    const nextSegment = prepared[index + 1] || null;
+    const words = normalizeLyricsWords(rawSegment.words);
+    let text = String(rawSegment.text || "").trim();
+    let startMs = Number(rawSegment.startMs);
+    let endMs = Number(rawSegment.endMs);
+
+    if ((!text || !Number.isFinite(startMs)) && words.length > 0) {
+      if (!text) {
+        text = words.map((word) => word.text).join(" ");
+      }
+      if (!Number.isFinite(startMs)) {
+        startMs = words[0].startMs;
+      }
+    }
+
+    if (!text || !Number.isFinite(startMs) || startMs < 0) {
+      continue;
+    }
+
+    const nextStartMs = nextSegment && Number.isFinite(nextSegment.startMs) ? Number(nextSegment.startMs) : null;
+    for (let wordIndex = 0; wordIndex < words.length; wordIndex += 1) {
+      const word = words[wordIndex];
+      const nextWord = words[wordIndex + 1] || null;
+      let wordEndMs = Number(word.endMs);
+      if (!Number.isFinite(wordEndMs) || wordEndMs <= word.startMs) {
+        if (nextWord && nextWord.startMs > word.startMs) {
+          wordEndMs = nextWord.startMs;
+        } else if (Number.isFinite(endMs) && endMs > word.startMs) {
+          wordEndMs = endMs;
+        } else if (Number.isFinite(nextStartMs) && nextStartMs > word.startMs) {
+          wordEndMs = nextStartMs;
+        } else {
+          wordEndMs = word.startMs + 380;
+        }
+      }
+      word.endMs = Math.max(word.startMs + 1, Math.round(wordEndMs));
+    }
+
+    if (!Number.isFinite(endMs) || endMs <= startMs) {
+      if (words.length > 0) {
+        endMs = words[words.length - 1].endMs;
+      }
+      if ((!Number.isFinite(endMs) || endMs <= startMs) && Number.isFinite(nextStartMs) && nextStartMs > startMs) {
+        endMs = nextStartMs;
+      }
+      if (!Number.isFinite(endMs) || endMs <= startMs) {
+        endMs = startMs + estimateLyricsSegmentDurationMs(text);
+      }
+    }
+
+    result.push({
+      text,
+      startMs: Math.round(startMs),
+      endMs: Math.max(Math.round(startMs) + 1, Math.round(endMs)),
+      words
+    });
+  }
+
+  return result;
+}
+
+function parseEnhancedLyricsWords(content) {
+  const words = [];
+  const wordTagPattern = /<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>/g;
+  let currentStartMs = null;
+  let cursor = 0;
+
+  for (const match of content.matchAll(wordTagPattern)) {
+    if (currentStartMs !== null) {
+      const tokenText = content.slice(cursor, match.index).replace(/\s+/g, " ").trim();
+      if (tokenText) {
+        words.push({
+          text: tokenText,
+          startMs: currentStartMs,
+          endMs: null
+        });
+      }
+    }
+
+    currentStartMs = parseLyricsTimestampToMs(match[1], match[2], match[3] || "");
+    cursor = match.index + match[0].length;
+  }
+
+  if (currentStartMs !== null) {
+    const tailText = content.slice(cursor).replace(/\s+/g, " ").trim();
+    if (tailText) {
+      words.push({
+        text: tailText,
+        startMs: currentStartMs,
+        endMs: null
+      });
+    }
+  }
+
+  return words;
+}
+
+function parseLyricsSegmentsFromJson(input) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    throw new HttpError(400, "Синхронизация текста: JSON невалиден");
+  }
+
+  const rawSegments = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.segments)
+      ? parsed.segments
+      : [];
+
+  return finalizeLyricsSegments(rawSegments.map((segment) => {
+    if (!segment || typeof segment !== "object") {
+      return null;
+    }
+
+    const text = String(segment.text ?? segment.line ?? segment.lyrics ?? "").trim();
+    const startCandidate = segment.startMs ?? segment.start ?? segment.time ?? segment.offsetMs;
+    const endCandidate = segment.endMs ?? segment.end ?? segment.timeEnd ?? segment.durationEndMs;
+    const startMs = Number(startCandidate);
+    const endMs = Number(endCandidate);
+
+    return {
+      text,
+      startMs: Number.isFinite(startMs) && startMs >= 0 ? Math.round(startMs) : null,
+      endMs: Number.isFinite(endMs) && endMs >= 0 ? Math.round(endMs) : null,
+      words: Array.isArray(segment.words) ? segment.words : []
+    };
+  }));
+}
+
+function parseLyricsSegmentsFromText(input) {
+  const lineTagPattern = /\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
+  const segments = [];
+  const lines = String(input || "").split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = String(rawLine || "");
+    const lineMatches = Array.from(line.matchAll(lineTagPattern));
+    if (lineMatches.length === 0) {
+      continue;
+    }
+
+    const content = line.replace(lineTagPattern, "").trim();
+    const words = parseEnhancedLyricsWords(content);
+    const segmentText = content.replace(/<\d{1,2}:\d{2}(?:[.:]\d{1,3})?>/g, "").replace(/\s+/g, " ").trim();
+
+    for (const match of lineMatches) {
+      const startMs = parseLyricsTimestampToMs(match[1], match[2], match[3] || "");
+      if (startMs === null) {
+        continue;
+      }
+
+      segments.push({
+        text: segmentText,
+        startMs,
+        endMs: null,
+        words: words.map((word) => ({
+          text: word.text,
+          startMs: word.startMs,
+          endMs: word.endMs
+        }))
+      });
+    }
+  }
+
+  return finalizeLyricsSegments(segments);
+}
+
+function normalizeTrackLyricsInput(input) {
+  const plain = String(input?.plain || "").trim().slice(0, MAX_LYRICS_PLAIN_LENGTH);
+  const syncText = String(input?.syncText || "").trim();
+
+  if (syncText.length > MAX_LYRICS_SYNC_LENGTH) {
+    throw new HttpError(400, "Синхронизация текста слишком длинная");
+  }
+
+  let segments = [];
+  if (syncText) {
+    const looksLikeJson = syncText.startsWith("{") || /^\[\s*(\{|\[|\])/.test(syncText);
+    segments = looksLikeJson
+      ? parseLyricsSegmentsFromJson(syncText)
+      : parseLyricsSegmentsFromText(syncText);
+  }
+
+  const hasWordTimings = segments.some((segment) => Array.isArray(segment.words) && segment.words.length > 0);
+  return {
+    plain: plain || (segments.length > 0 ? segments.map((segment) => segment.text).join("\n") : ""),
+    syncText,
+    segments,
+    hasWordTimings
+  };
+}
+
+function normalizeTrackGeniusInput(input) {
+  const allowedHosts = new Set(["genius.com", "www.genius.com"]);
+  const songId = String(input?.songId || "").trim().slice(0, 64);
+  const title = String(input?.title || "").trim().slice(0, 200);
+  const artist = String(input?.artist || "").trim().slice(0, 200);
+  const url = validateOptionalUrlField(input?.url, {
+    fieldName: "Ссылка Genius",
+    maxLength: 1000,
+    allowedHosts
+  });
+  const imageUrl = validateOptionalUrlField(input?.imageUrl, {
+    fieldName: "Картинка Genius",
+    maxLength: 1500
+  });
+
+  return {
+    songId,
+    url,
+    title,
+    artist,
+    imageUrl
+  };
+}
+
 function validateTrackPayload(body, { isUpdate = false } = {}) {
   const hasOwn = (key) => Object.prototype.hasOwnProperty.call(body, key);
 
   const payload = {
     kind: undefined,
+    isExplicit: undefined,
     title: undefined,
     description: undefined,
     genre: undefined,
@@ -269,12 +599,18 @@ function validateTrackPayload(body, { isUpdate = false } = {}) {
     bpm: undefined,
     rootNote: undefined,
     beatLicenses: undefined,
+    lyrics: undefined,
+    genius: undefined,
     audio: null,
     cover: null
   };
 
   if (!isUpdate || hasOwn("kind")) {
     payload.kind = normalizeTrackKind(body.kind);
+  }
+
+  if (!isUpdate || hasOwn("isExplicit")) {
+    payload.isExplicit = parseExplicitTrackFlag(body.isExplicit);
   }
 
   if (!isUpdate || hasOwn("title")) {
@@ -304,7 +640,7 @@ function validateTrackPayload(body, { isUpdate = false } = {}) {
   if (!isUpdate || hasOwn("authors")) {
     payload.authors = parseListInput(body.authors, {
       fieldName: "Авторы",
-      maxItems: 10,
+      maxItems: 100,
       maxLength: 60,
       required: false
     });
@@ -313,7 +649,7 @@ function validateTrackPayload(body, { isUpdate = false } = {}) {
   if (!isUpdate || hasOwn("producers")) {
     payload.producers = parseListInput(body.producers, {
       fieldName: "Продюсеры",
-      maxItems: 10,
+      maxItems: 100,
       maxLength: 60,
       required: false
     });
@@ -367,6 +703,30 @@ function validateTrackPayload(body, { isUpdate = false } = {}) {
 
   if (!isUpdate || hasOwn("beatLicenses")) {
     payload.beatLicenses = normalizeBeatLicenses(body.beatLicenses);
+  }
+
+  if (!isUpdate || hasOwn("lyricsPlain") || hasOwn("lyricsSyncText")) {
+    payload.lyrics = normalizeTrackLyricsInput({
+      plain: body.lyricsPlain,
+      syncText: body.lyricsSyncText
+    });
+  }
+
+  if (
+    !isUpdate ||
+    hasOwn("geniusSongId") ||
+    hasOwn("geniusUrl") ||
+    hasOwn("geniusTitle") ||
+    hasOwn("geniusArtist") ||
+    hasOwn("geniusImageUrl")
+  ) {
+    payload.genius = normalizeTrackGeniusInput({
+      songId: body.geniusSongId,
+      url: body.geniusUrl,
+      title: body.geniusTitle,
+      artist: body.geniusArtist,
+      imageUrl: body.geniusImageUrl
+    });
   }
 
   const hasAudioFields = hasOwn("fileBase64") || hasOwn("fileName") || hasOwn("mimeType");
@@ -459,6 +819,7 @@ function parseTrackMultipartPayload(multipart, { isUpdate = false } = {}) {
   const { fields, files } = multipart;
   const payload = {
     kind: undefined,
+    isExplicit: undefined,
     title: undefined,
     description: undefined,
     genre: undefined,
@@ -471,12 +832,18 @@ function parseTrackMultipartPayload(multipart, { isUpdate = false } = {}) {
     bpm: undefined,
     rootNote: undefined,
     beatLicenses: undefined,
+    lyrics: undefined,
+    genius: undefined,
     audio: null,
     cover: null
   };
 
   if (!isUpdate || hasOwnField(fields, "kind")) {
     payload.kind = normalizeTrackKind(getSingleFieldValue(fields, "kind"));
+  }
+
+  if (!isUpdate || hasOwnField(fields, "isExplicit")) {
+    payload.isExplicit = parseExplicitTrackFlag(getSingleFieldValue(fields, "isExplicit"));
   }
 
   if (!isUpdate || hasOwnField(fields, "title")) {
@@ -506,7 +873,7 @@ function parseTrackMultipartPayload(multipart, { isUpdate = false } = {}) {
   if (!isUpdate || hasOwnField(fields, "authors")) {
     payload.authors = parseListInput(getSingleFieldValue(fields, "authors"), {
       fieldName: "Авторы",
-      maxItems: 10,
+      maxItems: 100,
       maxLength: 60,
       required: false
     });
@@ -515,7 +882,7 @@ function parseTrackMultipartPayload(multipart, { isUpdate = false } = {}) {
   if (!isUpdate || hasOwnField(fields, "producers")) {
     payload.producers = parseListInput(getSingleFieldValue(fields, "producers"), {
       fieldName: "Продюсеры",
-      maxItems: 10,
+      maxItems: 100,
       maxLength: 60,
       required: false
     });
@@ -569,6 +936,30 @@ function parseTrackMultipartPayload(multipart, { isUpdate = false } = {}) {
     payload.beatLicenses = normalizeBeatLicenses(getSingleFieldValue(fields, "beatLicenses"));
   }
 
+  if (!isUpdate || hasOwnField(fields, "lyricsPlain") || hasOwnField(fields, "lyricsSyncText")) {
+    payload.lyrics = normalizeTrackLyricsInput({
+      plain: getSingleFieldValue(fields, "lyricsPlain"),
+      syncText: getSingleFieldValue(fields, "lyricsSyncText")
+    });
+  }
+
+  if (
+    !isUpdate ||
+    hasOwnField(fields, "geniusSongId") ||
+    hasOwnField(fields, "geniusUrl") ||
+    hasOwnField(fields, "geniusTitle") ||
+    hasOwnField(fields, "geniusArtist") ||
+    hasOwnField(fields, "geniusImageUrl")
+  ) {
+    payload.genius = normalizeTrackGeniusInput({
+      songId: getSingleFieldValue(fields, "geniusSongId"),
+      url: getSingleFieldValue(fields, "geniusUrl"),
+      title: getSingleFieldValue(fields, "geniusTitle"),
+      artist: getSingleFieldValue(fields, "geniusArtist"),
+      imageUrl: getSingleFieldValue(fields, "geniusImageUrl")
+    });
+  }
+
   payload.audio = getSingleMultipartFile(files, "audio");
   payload.cover = getSingleMultipartFile(files, "cover");
 
@@ -601,6 +992,23 @@ function parseTrackMultipartPayload(multipart, { isUpdate = false } = {}) {
   return payload;
 }
 
+function parseExplicitTrackFlag(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (["true", "1", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  throw new HttpError(400, "Некорректное значение метки E");
+}
+
 function parseAlbumPayloadFromBody(body) {
   const title = String(body.title || "").trim();
   if (title.length < 1 || title.length > 120) {
@@ -619,14 +1027,14 @@ function parseAlbumPayloadFromBody(body) {
 
   const authors = parseListInput(body.authors, {
     fieldName: "Авторы",
-    maxItems: 10,
+    maxItems: 100,
     maxLength: 60,
     required: false
   });
 
   const producers = parseListInput(body.producers, {
     fieldName: "Продюсеры",
-    maxItems: 10,
+    maxItems: 100,
     maxLength: 60,
     required: false
   });
@@ -642,6 +1050,7 @@ function parseAlbumPayloadFromBody(body) {
 
   const trackIds = parseListInput(body.trackIds, {
     fieldName: "Треки альбома",
+    maxItems: 1000,
     maxLength: 64,
     required: true
   });
@@ -751,8 +1160,8 @@ async function toCoverFileEntry(upload, cleanupPaths) {
   const fileName = sanitizeBaseName(upload.fileName);
   const mimeType = String(upload.mimeType || "").toLowerCase();
 
-  if (!IMAGE_MIME_TYPES.has(mimeType)) {
-    throw new HttpError(400, "Обложка должна быть PNG или JPG");
+  if (!COVER_IMAGE_MIME_TYPES.has(mimeType)) {
+    throw new HttpError(400, "Обложка должна быть PNG, JPG или GIF");
   }
 
   const binary = decodeBase64File(upload.fileBase64, MAX_IMAGE_SIZE, "Обложка");
@@ -825,9 +1234,14 @@ async function ensureValidAudioUpload(fileEntry) {
     throw new HttpError(413, "Аудиофайл превышает разрешенный размер");
   }
 
+  const processedAudio = await processAudioFile({
+    ...fileEntry,
+    mimeType: normalizedAudioMime
+  });
+
   return {
     ...fileEntry,
-    mimeType: normalizedAudioMime,
-    size: sourceSize
+    size: sourceSize,
+    ...processedAudio
   };
 }

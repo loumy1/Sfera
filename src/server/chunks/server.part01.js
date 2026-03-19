@@ -1,6 +1,7 @@
 "use strict";
 
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const fsp = fs.promises;
 const path = require("path");
@@ -37,6 +38,7 @@ const MESSAGES_FILE = path.join(DATA_DIR, "messages.json");
 const NOTIFICATIONS_FILE = path.join(DATA_DIR, "notifications.json");
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
 const PROMO_CODES_FILE = path.join(DATA_DIR, "promocodes.json");
+const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 const EMAIL_TOKENS_FILE = path.join(DATA_DIR, "email_tokens.json");
 const MAIL_OUTBOX_FILE = path.join(DATA_DIR, "mail_outbox.json");
 
@@ -58,6 +60,7 @@ const ALLOWED_AUDIO_MIME_TYPES = new Set([
 
 const ALLOWED_AUDIO_EXTENSIONS = new Set([".mp3", ".wav"]);
 const IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg"]);
+const COVER_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif"]);
 const TRACK_PUBLISH_MODES = new Set(["public", "draft", "private", "link", "premiere"]);
 const LISTEN_MILESTONES = [25, 50, 100];
 const LISTEN_HISTORY_LIMIT = 100;
@@ -82,6 +85,15 @@ const SMTP_GREETING_TIMEOUT_MS = Number(process.env.SMTP_GREETING_TIMEOUT_MS || 
 const SMTP_SOCKET_TIMEOUT_MS = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 20000);
 const MAIL_WRITE_OUTBOX_COPY = String(process.env.MAIL_WRITE_OUTBOX_COPY || "").trim().toLowerCase() === "true";
 const SMTP_IS_CONFIGURED = Boolean(SMTP_HOST && SMTP_PORT && SMTP_FROM);
+const GENIUS_ACCESS_TOKEN = String(process.env.GENIUS_ACCESS_TOKEN || "").trim();
+const MAX_EXTERNAL_RESPONSE_BYTES = 2 * 1024 * 1024;
+const MAX_LYRICS_PLAIN_LENGTH = 50000;
+const MAX_LYRICS_SYNC_LENGTH = 120000;
+const MAX_GENIUS_QUERY_LENGTH = 200;
+const MAX_REPORT_REASON_LENGTH = 120;
+const MAX_REPORT_DETAILS_LENGTH = 1000;
+const REPORT_TARGET_TYPES = new Set(["track", "user", "comment"]);
+const REPORT_STATUSES = new Set(["open", "resolved", "dismissed"]);
 
 const AUTH_RATE_LIMITS = {
   register: { windowMs: 15 * 60 * 1000, max: 5 },
@@ -166,6 +178,7 @@ async function ensureStorage() {
   await ensureJsonFile(NOTIFICATIONS_FILE, []);
   await ensureJsonFile(SESSIONS_FILE, {});
   await ensureJsonFile(PROMO_CODES_FILE, { codes: [] });
+  await ensureJsonFile(REPORTS_FILE, []);
   await ensureJsonFile(EMAIL_TOKENS_FILE, { tokens: [] });
   await ensureJsonFile(MAIL_OUTBOX_FILE, []);
 
@@ -222,6 +235,69 @@ function sendText(res, statusCode, message) {
     "Content-Length": Buffer.byteLength(body)
   });
   res.end(body);
+}
+
+function requestJsonFromUrl(urlString, options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  const timeoutMs = Number(options.timeoutMs || 15000);
+  const maxBytes = Number(options.maxBytes || MAX_EXTERNAL_RESPONSE_BYTES);
+  let targetUrl = null;
+
+  try {
+    targetUrl = new URL(urlString);
+  } catch {
+    return Promise.reject(new Error("Некорректный внешний URL"));
+  }
+
+  const transport = targetUrl.protocol === "http:" ? http : https;
+
+  return new Promise((resolve, reject) => {
+    const request = transport.request(targetUrl, {
+      method,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "sfera/1.0 (+https://sfera.fun)",
+        ...(options.headers || {})
+      }
+    }, (response) => {
+      const chunks = [];
+      let totalBytes = 0;
+
+      response.on("data", (chunk) => {
+        totalBytes += chunk.length;
+        if (totalBytes > maxBytes) {
+          request.destroy(new Error("Ответ внешнего сервиса слишком большой"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+
+      response.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf8");
+        let data = null;
+
+        try {
+          data = body ? JSON.parse(body) : {};
+        } catch {
+          reject(new Error("Внешний сервис вернул невалидный JSON"));
+          return;
+        }
+
+        resolve({
+          statusCode: Number(response.statusCode || 0),
+          headers: response.headers || {},
+          data
+        });
+      });
+    });
+
+    request.setTimeout(timeoutMs, () => {
+      request.destroy(new Error("Таймаут внешнего сервиса"));
+    });
+
+    request.on("error", reject);
+    request.end(options.body || undefined);
+  });
 }
 
 function parseCookieHeader(header) {
@@ -304,6 +380,18 @@ function verifyPassword(password, salt, expectedHash) {
   return crypto.timingSafeEqual(expected, actual);
 }
 
+function generateTemporaryPassword(length = 14) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
+  const bytes = crypto.randomBytes(Math.max(length, 12) * 2);
+  let password = "";
+
+  for (let i = 0; i < bytes.length && password.length < length; i += 1) {
+    password += alphabet[bytes[i] % alphabet.length];
+  }
+
+  return password;
+}
+
 function normalizeUsername(value) {
   return String(value || "").trim();
 }
@@ -330,7 +418,7 @@ function validatePassword(password) {
   }
 }
 
-function validateCredentials(username, password) {
+function validateUsername(username) {
   if (username.length < 3 || username.length > 24) {
     throw new HttpError(400, "Никнейм должен быть от 3 до 24 символов");
   }
@@ -338,6 +426,10 @@ function validateCredentials(username, password) {
   if (!/^[a-zA-Z0-9_]+$/.test(username)) {
     throw new HttpError(400, "Никнейм может содержать только буквы, цифры и _");
   }
+}
+
+function validateCredentials(username, password) {
+  validateUsername(username);
 
   validatePassword(password);
 }
@@ -555,12 +647,20 @@ function inferAudioExtension(fileName, mimeType) {
 function inferImageExtension(fileName, mimeType) {
   const ext = path.extname(String(fileName || "")).toLowerCase();
 
+  if (ext === ".gif") {
+    return ".gif";
+  }
+
   if (ext === ".png") {
     return ".png";
   }
 
   if (ext === ".jpg" || ext === ".jpeg") {
     return ".jpg";
+  }
+
+  if (mimeType === "image/gif") {
+    return ".gif";
   }
 
   return mimeType === "image/png" ? ".png" : ".jpg";

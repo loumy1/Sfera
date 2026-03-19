@@ -1,9 +1,9 @@
 (() => {
 const CHUNK_URLS = [
-  "/assets/js/app/chunks/app.part01.js?v=20260314-beatslistfix2",
-  "/assets/js/app/chunks/app.part02.js?v=20260314-beatslistfix2",
-  "/assets/js/app/chunks/app.part03.js?v=20260314-beatslistfix2",
-  "/assets/js/app/chunks/app.part04.js?v=20260314-beatslistfix2"
+  "/assets/js/app/chunks/app.part01.js?v=20260319-explicit1",
+  "/assets/js/app/chunks/app.part02.js?v=20260319-explicit1",
+  "/assets/js/app/chunks/app.part03.js?v=20260319-explicit1",
+  "/assets/js/app/chunks/app.part04.js?v=20260319-explicit1"
 ];
 
   async function loadSource() {

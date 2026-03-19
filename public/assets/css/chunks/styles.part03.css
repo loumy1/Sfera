@@ -54,6 +54,27 @@ small,
   display: none;
 }
 
+@media (max-width: 700px) {
+  .publish-sync-audio-player {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .publish-sync-audio-btn:last-child {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .publish-sync-audio-meta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+
+  .publish-sync-audio-time {
+    justify-content: space-between;
+  }
+}
+
 @keyframes ambientShift {
   0% {
     background-position: 0% 0%, 100% 100%, center;
@@ -101,6 +122,63 @@ small,
   }
 }
 
+@keyframes brandHaloSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brandOrbitSpinA {
+  from {
+    transform: rotate(18deg) scaleY(0.56);
+  }
+  to {
+    transform: rotate(378deg) scaleY(0.56);
+  }
+}
+
+@keyframes brandOrbitSpinB {
+  from {
+    transform: rotate(-54deg) scaleX(0.72);
+  }
+  to {
+    transform: rotate(306deg) scaleX(0.72);
+  }
+}
+
+@keyframes brandMarkPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 18px rgba(255, 255, 255, 0.1),
+      0 0 34px rgba(160, 160, 160, 0.12),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 24px rgba(255, 255, 255, 0.18),
+      0 0 48px rgba(196, 196, 196, 0.22),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transform: scale(1.04);
+  }
+}
+
+@keyframes brandCorePulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
 @keyframes brandFloat {
   0%,
   100% {
@@ -108,6 +186,24 @@ small,
   }
   50% {
     transform: translateY(-1px);
+  }
+}
+
+@keyframes brandGlintSweep {
+  0%,
+  100% {
+    transform: translateX(-12%) rotate(26deg);
+    opacity: 0.14;
+  }
+  46% {
+    opacity: 0.62;
+  }
+  54% {
+    transform: translateX(230%) rotate(26deg);
+    opacity: 0.74;
+  }
+  66% {
+    opacity: 0.08;
   }
 }
 
@@ -157,6 +253,15 @@ small,
   .topbar-inner {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .brand-logo {
+    gap: 0.6rem;
+  }
+
+  .brand-mark {
+    min-width: 30px;
+    min-height: 30px;
   }
 
   .tabs-nav {
@@ -217,6 +322,38 @@ small,
   .album-track-picker-controls {
     grid-template-columns: 1fr;
     justify-items: stretch;
+  }
+
+  .publish-hero-card,
+  .publish-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .publish-mode-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .publish-form-head,
+  .publish-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .publish-form-title {
+    align-items: center;
+  }
+
+  .publish-submit-row {
+    justify-content: stretch;
+  }
+
+  .publish-submit-row button {
+    width: 100%;
+    min-width: 0;
   }
 
   .album-track-filter-group {
@@ -310,10 +447,57 @@ small,
     grid-template-columns: 1fr;
   }
 
+  .admin-storage-metrics,
+  .admin-storage-breakdown-grid,
+  .admin-storage-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-storage-metric-head,
+  .admin-storage-kv {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-storage-metric-value,
+  .admin-storage-kv strong {
+    text-align: left;
+  }
+
   .action-menu-panel {
     left: 0;
     right: auto;
-    min-width: min(260px, 72vw);
+    width: min(300px, calc(100vw - 1.5rem));
+    min-width: min(220px, calc(100vw - 1.5rem));
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .sfera-dialog-overlay {
+    padding: 0.7rem;
+  }
+
+  .sfera-dialog-shell {
+    width: min(100%, calc(100vw - 1rem));
+    padding: 1rem 0.9rem 0.9rem;
+    border-radius: 24px;
+  }
+
+  .sfera-dialog-head {
+    gap: 0.65rem;
+  }
+
+  .sfera-dialog-close {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .sfera-dialog-actions {
+    justify-content: stretch;
+  }
+
+  .sfera-dialog-actions > button {
+    flex: 1 1 100%;
+    justify-content: center;
   }
 
   .album-modal-content {
@@ -326,5 +510,124 @@ small,
 
   .album-modal-tracks {
     max-height: min(44vh, 420px);
+  }
+
+  .global-player:not(.is-mini) .global-player-inner {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "cover"
+      "info"
+      "controls"
+      "volume"
+      "seek"
+      "details";
+  }
+
+  .player-overlay-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .player-overlay-hero-top {
+    grid-template-columns: 1fr;
+  }
+
+  .player-overlay-cover {
+    max-width: 320px;
+  }
+
+  .player-overlay-transport {
+    padding: 0.8rem;
+    gap: 0.75rem;
+  }
+
+  .player-overlay-transport-controls {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .player-overlay-transport-btn {
+    flex: 1 1 120px;
+    justify-content: center;
+  }
+
+  .player-comment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .player-queue-list,
+  .player-comments-list,
+  .player-lyrics-viewer {
+    max-height: none;
+  }
+
+  .player-lyrics-viewer.is-synced {
+    min-height: min(34vh, 320px);
+    padding: 0.85rem 0;
+  }
+
+  .player-lyrics-viewer.is-synced .player-lyrics-line.active {
+    font-size: clamp(1.24rem, 5.6vw, 1.72rem);
+  }
+
+  .player-lyrics-viewer.is-synced .player-lyrics-line.is-previous,
+  .player-lyrics-viewer.is-synced .player-lyrics-line.is-next {
+    font-size: clamp(0.98rem, 4vw, 1.14rem);
+  }
+}
+
+@media (max-width: 720px) {
+  .site-intro-shell {
+    width: min(94vw, 540px);
+    gap: 0.84rem;
+  }
+
+  .site-intro-orbits {
+    width: min(340px, 78vw);
+    height: min(340px, 78vw);
+  }
+
+  .site-intro-stage {
+    width: min(92vw, 420px);
+    height: 88px;
+  }
+
+  .site-intro-logo {
+    font-size: clamp(2.14rem, 10vw, 3.5rem);
+    gap: 0.76rem;
+  }
+
+  .site-intro-logo .brand-mark {
+    min-width: 68px;
+    min-height: 68px;
+  }
+
+  .site-intro-kicker {
+    font-size: 0.62rem;
+    letter-spacing: 0.24em;
+  }
+
+  .site-intro-badge {
+    font-size: 0.64rem;
+    letter-spacing: 0.22em;
+  }
+
+  .site-intro-tagline {
+    font-size: 1rem;
+    max-width: 19rem;
+  }
+
+  .site-intro-subline {
+    font-size: 0.84rem;
+    max-width: 18rem;
+  }
+
+  .site-intro-eq {
+    gap: 0.34rem;
+    height: 44px;
+  }
+
+  .site-intro-eq span {
+    width: 5px;
   }
 }

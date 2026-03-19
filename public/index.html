@@ -4,9 +4,74 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>sfera</title>
-    <link rel="stylesheet" href="/styles.css?v=20260314-feedbeatfix1" />
+    <script>
+      (() => {
+        try {
+          if (window.sessionStorage.getItem("sfera_intro_seen_v2") === "1") {
+            document.documentElement.classList.add("site-intro-skip");
+          }
+        } catch {
+          // ignore
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20260311-favicon2" />
+    <link rel="stylesheet" href="/styles.css?v=20260319-queuefix1" />
+    <script>
+      (() => {
+        const { pathname, search, origin } = window.location;
+        const publicProfileMatch = pathname.match(/^\/u\/([a-zA-Z0-9_]+)\/?$/);
+        if (!publicProfileMatch) {
+          return;
+        }
+
+        const currentUrl = new URL(window.location.href);
+        const redirectUrl = new URL("/public-profile.html", origin);
+        redirectUrl.searchParams.set("username", decodeURIComponent(publicProfileMatch[1] || ""));
+
+        const requestedUserId = String(currentUrl.searchParams.get("uid") || "").trim();
+        if (requestedUserId) {
+          redirectUrl.searchParams.set("uid", requestedUserId);
+        }
+
+        const targetHref = `${redirectUrl.pathname}${redirectUrl.search}`;
+        const currentHref = `${pathname}${search}`;
+        if (targetHref === currentHref) {
+          return;
+        }
+
+        window.location.replace(targetHref);
+      })();
+    </script>
   </head>
   <body>
+    <div id="siteIntroOverlay" class="site-intro-overlay" aria-hidden="true">
+      <div class="site-intro-shell">
+        <span class="site-intro-halo" aria-hidden="true"></span>
+        <div class="site-intro-orbits" aria-hidden="true">
+          <span class="site-intro-orbit site-intro-orbit-a"></span>
+          <span class="site-intro-orbit site-intro-orbit-b"></span>
+          <span class="site-intro-orbit site-intro-orbit-c"></span>
+        </div>
+        <div class="site-intro-stage" aria-hidden="true">
+          <span class="site-intro-stage-line"></span>
+          <span class="site-intro-stage-core"></span>
+        </div>
+        <div class="site-intro-logo" data-brand="sfera">
+          <span class="brand-mark" aria-hidden="true">
+            <span class="brand-mark-orbit brand-mark-orbit-a"></span>
+            <span class="brand-mark-orbit brand-mark-orbit-b"></span>
+            <span class="brand-mark-core"></span>
+            <span class="brand-mark-glint"></span>
+          </span>
+          <span class="brand-logo-text" data-brand="sfera">sfera</span>
+        </div>
+        <div class="site-intro-eq" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <span class="site-intro-sr-only">Загрузка сайта sfera</span>
+    </div>
     <div class="bg-spheres" aria-hidden="true">
       <span class="bg-sphere sphere-1"></span>
       <span class="bg-sphere sphere-2"></span>
@@ -22,15 +87,24 @@
     <header class="topbar">
       <div class="container topbar-inner">
         <div class="brand-wrap">
-          <h1><a id="brandFeedLink" class="brand-logo" href="#feed" data-brand="sfera">sfera</a></h1>
+          <h1>
+            <a id="brandFeedLink" class="brand-logo" href="#feed" data-brand="sfera">
+              <span class="brand-mark" aria-hidden="true">
+                <span class="brand-mark-orbit brand-mark-orbit-a"></span>
+                <span class="brand-mark-orbit brand-mark-orbit-b"></span>
+                <span class="brand-mark-core"></span>
+                <span class="brand-mark-glint"></span>
+              </span>
+              <span class="brand-logo-text" data-brand="sfera">sfera</span>
+            </a>
+          </h1>
           <p class="brand-beta">beta-test</p>
         </div>
 
         <div class="topbar-right">
           <div class="topbar-pills">
-            <div id="onlineCounter" class="online-pill">Онлайн: 0</div>
             <button id="notificationsBtn" class="ghost notifications-btn hidden" type="button" aria-label="Уведомления">
-              <span class="notifications-btn-icon" aria-hidden="true">🔔</span>
+              <span class="notifications-btn-icon sf-icon" data-icon="bell" aria-hidden="true"></span>
               <span id="notificationsBtnText">Уведомления</span>
               <span id="notificationsBadge" class="notifications-badge hidden">0</span>
             </button>
@@ -50,62 +124,113 @@
 
     <div id="authGateModal" class="auth-gate-modal hidden" aria-hidden="true">
       <div class="auth-gate-dialog card" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
-        <div class="auth-gate-head">
-          <div class="brand-wrap auth-gate-brand">
-            <h2 id="authGateTitle" class="brand-logo" data-brand="sfera">sfera</h2>
-            <p id="authGateHint" class="brand-beta">Войди или создай аккаунт, чтобы продолжить</p>
-          </div>
-          <p id="authGateStatus" class="global-status toast-status auth-gate-status"></p>
-        </div>
+        <div class="auth-gate-shell">
+          <section class="auth-gate-showcase">
+            <div class="auth-gate-visual" aria-hidden="true">
+              <span class="auth-gate-visual-ring auth-gate-visual-ring-a"></span>
+              <span class="auth-gate-visual-ring auth-gate-visual-ring-b"></span>
+              <span class="auth-gate-visual-ring auth-gate-visual-ring-c"></span>
+              <span class="auth-gate-visual-core"></span>
+            </div>
+            <p id="authGateEyebrow" class="auth-gate-eyebrow">погружение в музыкальное пространство</p>
+            <div class="brand-wrap auth-gate-brand">
+              <h2 id="authGateTitle" class="brand-logo" data-brand="sfera">
+                <span class="brand-mark" aria-hidden="true">
+                  <span class="brand-mark-orbit brand-mark-orbit-a"></span>
+                  <span class="brand-mark-orbit brand-mark-orbit-b"></span>
+                  <span class="brand-mark-core"></span>
+                  <span class="brand-mark-glint"></span>
+                </span>
+                <span class="brand-logo-text" data-brand="sfera">sfera</span>
+              </h2>
+            </div>
+            <div class="auth-gate-showcase-copy">
+              <h3 id="authGateLeadTitle">Открой свой релизный центр внутри sfera</h3>
+              <p id="authGateLeadText">Публикуй музыку, собирай профиль артиста, общайся и слушай релизы в одном цельном интерфейсе.</p>
+            </div>
+            <div class="auth-gate-feature-list">
+              <div class="auth-gate-feature">
+                <span class="sf-icon sf-icon--md" data-icon="track" aria-hidden="true"></span>
+                <span id="authGateFeatureReleases">Треки, альбомы и биты в одном аккаунте</span>
+              </div>
+              <div class="auth-gate-feature">
+                <span class="sf-icon sf-icon--md" data-icon="lyrics" aria-hidden="true"></span>
+                <span id="authGateFeatureLyrics">Живой текст, fullscreen player и атмосфера релиза</span>
+              </div>
+              <div class="auth-gate-feature">
+                <span class="sf-icon sf-icon--md" data-icon="user" aria-hidden="true"></span>
+                <span id="authGateFeatureCommunity">Лайки, репосты, сообщения и свой профиль артиста</span>
+              </div>
+            </div>
+          </section>
 
-        <div class="auth-gate-grid">
-          <form id="authGateRegisterForm" class="mini-form auth-gate-form">
-            <h4>Регистрация</h4>
-            <label>
-              Email
-              <input type="email" name="email" maxlength="254" autocomplete="email" required />
-            </label>
-            <label>
-              Никнейм
-              <input type="text" name="username" minlength="3" maxlength="24" required />
-            </label>
-            <label>
-              Пароль
-              <input type="password" name="password" minlength="6" maxlength="100" required />
-            </label>
-            <button type="submit">Создать аккаунт</button>
-          </form>
+          <section class="auth-gate-main">
+            <div class="auth-gate-head">
+              <div class="auth-gate-head-copy">
+                <p id="authGateHint" class="auth-gate-panel-kicker">Войди или создай аккаунт, чтобы продолжить</p>
+                <div class="auth-gate-tabs" role="tablist" aria-label="Сценарии входа">
+                  <button id="authGateTabLoginBtn" class="auth-gate-tab active" type="button" data-auth-gate-tab="login" aria-selected="true">Вход</button>
+                  <button id="authGateTabRegisterBtn" class="auth-gate-tab" type="button" data-auth-gate-tab="register" aria-selected="false">Регистрация</button>
+                  <button id="authGateTabResetBtn" class="auth-gate-tab" type="button" data-auth-gate-tab="reset" aria-selected="false">Сброс</button>
+                </div>
+              </div>
+              <p id="authGateStatus" class="global-status toast-status auth-gate-status"></p>
+            </div>
 
-          <form id="authGateLoginForm" class="mini-form auth-gate-form">
-            <h4>Вход</h4>
-            <label>
-              Никнейм
-              <input type="text" name="username" minlength="3" maxlength="24" required />
-            </label>
-            <label>
-              Пароль
-              <input type="password" name="password" minlength="6" maxlength="100" required />
-            </label>
-            <button type="submit">Войти</button>
-          </form>
-          <form id="authGatePasswordResetRequestForm" class="mini-form auth-gate-form">
-            <h4>Восстановление пароля</h4>
-            <label>
-              Email
-              <input type="email" name="email" maxlength="254" autocomplete="email" required />
-            </label>
-            <button type="submit" class="ghost">Отправить ссылку для сброса</button>
-          </form>
-        </div>
-        <div class="auth-gate-controls mini-form">
-          <label for="authGateLanguageSelect" id="authGateLanguageLabel">Язык интерфейса</label>
-          <select id="authGateLanguageSelect">
-            <option value="ru">Русский</option>
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-            <option value="uk">Українська</option>
-          </select>
-          <button id="authGateGuestBtn" type="button" class="ghost">Продолжить как гость</button>
+            <div class="auth-gate-grid">
+              <form id="authGateLoginForm" class="mini-form auth-gate-form auth-gate-form-panel is-active" data-auth-gate-panel="login" aria-hidden="false">
+                <h4>Вход</h4>
+                <label>
+                  Никнейм
+                  <input type="text" name="username" minlength="3" maxlength="24" required />
+                </label>
+                <label>
+                  Пароль
+                  <input type="password" name="password" minlength="6" maxlength="100" required />
+                </label>
+                <button type="submit">Войти</button>
+              </form>
+
+              <form id="authGateRegisterForm" class="mini-form auth-gate-form auth-gate-form-panel" data-auth-gate-panel="register" aria-hidden="true">
+                <h4>Регистрация</h4>
+                <label>
+                  Email
+                  <input type="email" name="email" maxlength="254" autocomplete="email" required />
+                </label>
+                <label>
+                  Никнейм
+                  <input type="text" name="username" minlength="3" maxlength="24" required />
+                </label>
+                <label>
+                  Пароль
+                  <input type="password" name="password" minlength="6" maxlength="100" required />
+                </label>
+                <button type="submit">Создать аккаунт</button>
+              </form>
+
+              <form id="authGatePasswordResetRequestForm" class="mini-form auth-gate-form auth-gate-form-panel" data-auth-gate-panel="reset" aria-hidden="true">
+                <h4>Восстановление пароля</h4>
+                <label>
+                  Email
+                  <input type="email" name="email" maxlength="254" autocomplete="email" required />
+                </label>
+                <button type="submit" class="ghost">Отправить ссылку для сброса</button>
+              </form>
+            </div>
+
+            <div class="auth-gate-controls mini-form">
+              <div class="auth-gate-language-wrap">
+                <label for="authGateLanguageSelect" id="authGateLanguageLabel">Язык интерфейса</label>
+                <select id="authGateLanguageSelect">
+                  <option value="ru">Русский</option>
+                  <option value="en">English</option>
+                  <option value="zh">中文</option>
+                  <option value="uk">Українська</option>
+                </select>
+              </div>
+              <button id="authGateGuestBtn" type="button" class="ghost">Продолжить как гость</button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -122,6 +247,22 @@
             <div id="profileHeader" class="profile-header">
               <img id="profileAvatar" class="profile-avatar" src="" alt="Аватар" />
             </div>
+            <input
+              id="profileAvatarFileInput"
+              class="hidden"
+              type="file"
+              accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif"
+              aria-hidden="true"
+              tabindex="-1"
+            />
+            <input
+              id="profileHeaderFileInput"
+              class="hidden"
+              type="file"
+              accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+              aria-hidden="true"
+              tabindex="-1"
+            />
             <div class="profile-main profile-main-hero">
               <div class="profile-identity">
                 <h2 id="profileUsername"></h2>
@@ -218,231 +359,529 @@
             <p>Сначала войди в аккаунт, потом сможешь загружать треки, альбомы и биты.</p>
           </div>
 
-          <form id="uploadForm" class="upload-form hidden">
-            <h2>Новый трек</h2>
-
-            <label>
-              Название песни
-              <input id="trackTitle" type="text" maxlength="120" required />
-            </label>
-
-            <label>
-              Жанр
-              <input id="trackGenre" type="text" maxlength="60" required />
-            </label>
-
-            <label>
-              Режим публикации
-              <select id="trackPublishMode" required>
-                <option value="public">Публичный</option>
-                <option value="draft">Черновик</option>
-                <option value="private">Приватный</option>
-                <option value="link">Доступ по ссылке</option>
-                <option value="premiere">Премьера по времени</option>
-              </select>
-            </label>
-
-            <label id="trackPremiereAtWrap" class="hidden">
-              Дата и время премьеры
-              <input id="trackPremiereAt" type="datetime-local" />
-            </label>
-
-            <label>
-              Авторы (через запятую)
-              <input id="trackAuthors" type="text" maxlength="500" placeholder="Например: sfera, guest" />
-            </label>
-
-            <label>
-              Продюсеры / Битмейкеры (через запятую)
-              <input id="trackProducers" type="text" maxlength="500" placeholder="Например: producer1, producer2" />
-            </label>
-
-            <label>
-              Хештеги (до 5, через запятую)
-              <input id="trackHashtags" type="text" maxlength="300" placeholder="Например: night, vibe, rap" />
-            </label>
-
-            <label>
-              Описание песни
-              <textarea id="trackDescription" rows="4" maxlength="1000"></textarea>
-            </label>
-
-            <label>
-              Обложка (PNG/JPG)
-              <input id="trackCover" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" required />
-              <small>Обложка автоматически приводится к квадрату 500x500.</small>
-            </label>
-
-            <label>
-              Аудиофайл (MP3 до 15 МБ, WAV до 30 МБ)
-              <input id="trackFile" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required />
-              <small>WAV автоматически конвертируется на сервере в MP3 для экономии места.</small>
-            </label>
-
-            <button id="uploadBtn" type="submit">Опубликовать</button>
-          </form>
-
-          <form id="albumForm" class="upload-form hidden">
-            <h2>Новый альбом</h2>
-
-            <label>
-              Название альбома
-              <input id="albumTitle" type="text" maxlength="120" required />
-            </label>
-
-            <label>
-              Жанр
-              <input id="albumGenre" type="text" maxlength="60" required />
-            </label>
-
-            <label>
-              Авторы (через запятую)
-              <input id="albumAuthors" type="text" maxlength="500" placeholder="Например: sfera, guest" />
-            </label>
-
-            <label>
-              Продюсеры / Битмейкеры (через запятую)
-              <input id="albumProducers" type="text" maxlength="500" placeholder="Например: producer1, producer2" />
-            </label>
-
-            <label>
-              Хештеги (до 5, через запятую)
-              <input id="albumHashtags" type="text" maxlength="300" placeholder="Например: release, trap, 2026" />
-            </label>
-
-            <label>
-              Описание альбома
-              <textarea id="albumDescription" rows="4" maxlength="1000"></textarea>
-            </label>
-
-            <label>
-              Обложка альбома (PNG/JPG, необязательно)
-              <input id="albumCover" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
-              <small>Если выбрать файл, обложка тоже приводится к квадрату 500x500.</small>
-            </label>
-
-            <label>
-              Загрузить треки для альбома с компьютера (MP3/WAV)
-              <input id="albumTrackFiles" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" multiple />
-              <small>Можно выбрать несколько файлов и комбинировать их с уже загруженными треками.</small>
-            </label>
-            <div id="albumTrackFilesSummary" class="muted">Новых файлов не выбрано</div>
-
-            <div class="album-track-picker">
-              <div class="album-track-picker-head">
-                <strong>Выбери треки для альбома</strong>
-                <div id="albumTracksInfo" class="muted">Загрузка списка треков...</div>
-              </div>
-
-              <div class="album-track-picker-controls">
-                <input
-                  id="albumTracksSearchInput"
-                  type="search"
-                  maxlength="120"
-                  placeholder="Поиск по названию, авторам, продюсерам, жанру"
-                  autocomplete="off"
-                />
-                <select id="albumTracksSortSelect">
-                  <option value="newest">Сначала новые</option>
-                  <option value="oldest">Сначала старые</option>
-                  <option value="title_asc">По названию (А-Я)</option>
-                  <option value="title_desc">По названию (Я-А)</option>
-                </select>
-                <div class="album-track-filter-group">
-                  <button id="albumTracksFilterAllBtn" class="ghost album-track-filter active" type="button">Все</button>
-                  <button id="albumTracksFilterSelectedBtn" class="ghost album-track-filter" type="button">Выбранные</button>
+          <div id="publishShell" class="publish-shell hidden" data-publish-view="track">
+            <div class="publish-hero-card">
+              <div class="publish-hero-copy">
+                <span class="publish-hero-kicker">
+                  <span class="publish-hero-kicker-icon" data-icon="spark"></span>
+                  SFERA STUDIO
+                </span>
+                <h2 id="publishHeroTitle">Выложи новый трек без лишней возни</h2>
+                <p id="publishHeroText">
+                  Выбери формат релиза, заполни понятные блоки и, если нужно, добавь текст песни сразу во время публикации.
+                </p>
+                <div class="publish-hero-points">
+                  <span class="publish-hero-point"><span data-icon="track"></span> Отдельные сценарии для треков, альбомов и битов</span>
+                  <span class="publish-hero-point"><span data-icon="lyrics"></span> Текст песни можно прикрепить сразу</span>
+                  <span class="publish-hero-point"><span data-icon="album"></span> Всё разбито на понятные секции без каши</span>
                 </div>
               </div>
 
-              <div id="albumTracksList" class="simple-list album-track-options-list"></div>
+              <div class="publish-mode-grid" aria-label="Выбор типа релиза">
+                <button
+                  class="publish-mode-card active"
+                  type="button"
+                  data-publish-switch="track"
+                  data-publish-hero-title="Выложи новый трек без лишней возни"
+                  data-publish-hero-text="Оформи сингл, добавь обложку, описание и текст песни сразу, чтобы релиз был полностью готов уже в момент публикации."
+                >
+                  <span class="publish-mode-icon" data-icon="track"></span>
+                  <span class="publish-mode-copy">
+                    <strong>Трек</strong>
+                    <small>Сингл, премьера, описание, текст и синхронизация при желании.</small>
+                  </span>
+                </button>
+
+                <button
+                  class="publish-mode-card"
+                  type="button"
+                  data-publish-switch="album"
+                  data-publish-hero-title="Собери альбом из готовых и новых треков"
+                  data-publish-hero-text="Загрузи несколько файлов, собери треклист из уже опубликованных песен и оформи один цельный релиз."
+                >
+                  <span class="publish-mode-icon" data-icon="album"></span>
+                  <span class="publish-mode-copy">
+                    <strong>Альбом</strong>
+                    <small>Один релиз, несколько песен, треклист, обложка и нормальная сортировка.</small>
+                  </span>
+                </button>
+
+                <button
+                  class="publish-mode-card"
+                  type="button"
+                  data-publish-switch="beat"
+                  data-publish-hero-title="Выпусти бит как полноценный продукт"
+                  data-publish-hero-text="Добавь BPM, корневую ноту, лицензии и цены, чтобы бит сразу был готов к продаже и прослушиванию."
+                >
+                  <span class="publish-mode-icon" data-icon="beat"></span>
+                  <span class="publish-mode-copy">
+                    <strong>Бит</strong>
+                    <small>BPM, тональность, лицензии и отдельное оформление для продажи.</small>
+                  </span>
+                </button>
+              </div>
             </div>
 
-            <button id="albumPublishBtn" type="submit">Опубликовать альбом</button>
-          </form>
-
-          <form id="beatForm" class="upload-form hidden">
-            <h2>Новый бит</h2>
-
-            <label>
-              Название бита
-              <input id="beatTitle" type="text" maxlength="120" required />
-            </label>
-
-            <label>
-              Стиль / жанр бита
-              <input id="beatGenre" type="text" maxlength="60" placeholder="Например: Trap, Drill, Jersey" />
-            </label>
-
-            <div class="sub-grid">
-              <label>
-                BPM (скорость)
-                <input id="beatBpm" type="number" min="1" max="400" step="1" required />
-              </label>
-              <label>
-                Корневая нота
-                <input id="beatRootNote" type="text" maxlength="12" placeholder="Например: C#m" required />
-              </label>
-            </div>
-
-            <label>
-              Хештеги (до 5, через запятую)
-              <input id="beatHashtags" type="text" maxlength="300" placeholder="Например: trap, hard, dark" />
-            </label>
-
-            <label>
-              Описание бита
-              <textarea id="beatDescription" rows="4" maxlength="1000"></textarea>
-            </label>
-
-            <label>
-              Обложка бита (PNG/JPG)
-              <input id="beatCover" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" required />
-            </label>
-
-            <label>
-              Файл бита (MP3/WAV)
-              <input id="beatFile" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required />
-            </label>
-
-            <div class="beat-license-block">
-              <div class="beat-license-head">
-                <strong>Лицензии и цены</strong>
-                <label class="beat-currency-inline">
-                  Валюта
-                  <select id="beatLicenseCurrency">
-                    <option value="RUB">RUB ₽</option>
-                    <option value="USD">USD $</option>
-                  </select>
-                </label>
+            <form id="uploadForm" class="upload-form hidden publish-form-card" data-publish-panel="track">
+              <div class="publish-form-head">
+                <div class="publish-form-title">
+                  <span class="publish-form-icon" data-icon="track"></span>
+                  <div>
+                    <h2>Новый трек</h2>
+                    <p>Заполни релиз по блокам: основная инфа, команда, текст и сами файлы.</p>
+                  </div>
+                </div>
+                <span class="publish-form-badge">Сингл</span>
               </div>
 
-              <label class="beat-license-row">
-                <input id="beatLicenseMp3Enabled" type="checkbox" checked />
-                <span>MP3 Lease</span>
-                <input id="beatLicenseMp3Price" type="number" min="0" step="1" placeholder="Цена" />
-              </label>
+              <div class="publish-form-grid">
+                <div class="publish-form-column">
+                  <section class="publish-section-card">
+                    <h3>Основное</h3>
+                    <div class="sub-grid">
+                      <label>
+                        Название песни
+                        <input id="trackTitle" type="text" maxlength="120" required />
+                      </label>
 
-              <label class="beat-license-row">
-                <input id="beatLicenseWavEnabled" type="checkbox" />
-                <span>WAV Lease</span>
-                <input id="beatLicenseWavPrice" type="number" min="0" step="1" placeholder="Цена" />
-              </label>
+                      <label>
+                        Жанр
+                        <input id="trackGenre" type="text" maxlength="60" required />
+                      </label>
+                    </div>
 
-              <label class="beat-license-row">
-                <input id="beatLicenseTrackoutEnabled" type="checkbox" />
-                <span>Trackout</span>
-                <input id="beatLicenseTrackoutPrice" type="number" min="0" step="1" placeholder="Цена" />
-              </label>
+                    <div class="sub-grid">
+                      <label>
+                        Режим публикации
+                        <select id="trackPublishMode" required>
+                          <option value="public">Публичный</option>
+                          <option value="draft">Черновик</option>
+                          <option value="private">Приватный</option>
+                          <option value="link">Доступ по ссылке</option>
+                          <option value="premiere">Премьера по времени</option>
+                        </select>
+                      </label>
 
-              <label class="beat-license-row">
-                <input id="beatLicenseExclusiveEnabled" type="checkbox" />
-                <span>Exclusive</span>
-                <input id="beatLicenseExclusivePrice" type="number" min="0" step="1" placeholder="Цена" />
-              </label>
-            </div>
+                      <label id="trackPremiereAtWrap" class="hidden">
+                        Дата и время премьеры
+                        <input id="trackPremiereAt" type="datetime-local" />
+                      </label>
+                    </div>
 
-            <button id="beatPublishBtn" type="submit">Опубликовать бит</button>
-          </form>
+                    <label>
+                      Описание песни
+                      <textarea id="trackDescription" rows="5" maxlength="1000"></textarea>
+                    </label>
+
+                    <label class="publish-checkbox-field">
+                      <input id="trackExplicit" type="checkbox" />
+                      <span id="trackExplicitLabel">Метка E — в треке есть нецензурная лексика</span>
+                    </label>
+                  </section>
+
+                  <section class="publish-section-card">
+                    <h3>Команда релиза</h3>
+                    <label>
+                      Авторы (через запятую)
+                      <input id="trackAuthors" type="text" maxlength="500" placeholder="Например: sfera, guest" />
+                    </label>
+
+                    <label>
+                      Продюсеры / Битмейкеры (через запятую)
+                      <input id="trackProducers" type="text" maxlength="500" placeholder="Например: producer1, producer2" />
+                    </label>
+
+                    <label>
+                      Хештеги (до 5, через запятую)
+                      <input id="trackHashtags" type="text" maxlength="300" placeholder="Например: night, vibe, rap" />
+                    </label>
+                  </section>
+
+                  <section class="publish-section-card">
+                    <div class="publish-section-head">
+                      <div>
+                        <h3>Текст песни</h3>
+                        <p>Если текст уже готов, можно прикрепить его сразу, не откладывая на потом.</p>
+                      </div>
+                      <span class="publish-section-pill">необязательно</span>
+                    </div>
+
+                    <label>
+                      Основной текст песни
+                      <textarea
+                        id="trackLyricsPlain"
+                        class="publish-lyrics-field"
+                        rows="9"
+                        maxlength="12000"
+                        placeholder="Вставь текст песни построчно. Если синхронизации пока нет — этого уже достаточно."
+                      ></textarea>
+                    </label>
+
+                    <details id="trackLyricsSyncDetails" class="publish-details">
+                      <summary>
+                        <span data-icon="lyrics"></span>
+                        Добавить синхронизацию сразу
+                      </summary>
+                      <div class="publish-details-body">
+                        <div class="publish-tap-sync">
+                          <strong class="publish-tap-sync-title">Tap sync</strong>
+                          <div id="trackLyricsSyncStatus" class="publish-tap-sync-status">Строки будут взяты из поля «Основной текст песни».</div>
+                          <div id="trackLyricsSyncCurrent" class="publish-tap-sync-current">
+                            <strong>Что будет синхронизироваться</strong>
+                            <div class="publish-tap-sync-line is-current">
+                              <span class="publish-tap-sync-line-label">Сейчас</span>
+                              <span>Добавь текст песни по строкам, затем нажми «Начать по Enter».</span>
+                            </div>
+                          </div>
+
+                          <div id="trackLyricsSyncPlayer" class="publish-sync-audio-player">
+                            <button
+                              id="trackLyricsSyncPlayBtn"
+                              class="ghost publish-sync-audio-btn publish-sync-audio-btn--primary"
+                              type="button"
+                              aria-label="Воспроизвести предпрослушивание"
+                              disabled
+                            >
+                              <span class="sf-icon sf-icon--sm" data-icon="play" aria-hidden="true"></span>
+                            </button>
+                            <div class="publish-sync-audio-body">
+                              <div class="publish-sync-audio-meta">
+                                <div class="publish-sync-audio-copy">
+                                  <strong>Предпрослушивание</strong>
+                                  <span id="trackLyricsSyncMeta" class="muted">Выбери аудиофайл трека</span>
+                                </div>
+                                <div class="publish-sync-audio-time">
+                                  <span id="trackLyricsSyncCurrentTime">0:00</span>
+                                  <span class="publish-sync-audio-time-sep">/</span>
+                                  <span id="trackLyricsSyncDuration">0:00</span>
+                                </div>
+                              </div>
+                              <input
+                                id="trackLyricsSyncSeek"
+                                class="publish-sync-audio-seek"
+                                type="range"
+                                min="0"
+                                max="1000"
+                                step="1"
+                                value="0"
+                                disabled
+                                aria-label="Позиция предпрослушивания"
+                              />
+                            </div>
+                            <button
+                              id="trackLyricsSyncRestartBtn"
+                              class="ghost publish-sync-audio-btn"
+                              type="button"
+                              aria-label="Начать сначала"
+                              disabled
+                            >
+                              <span class="sf-icon sf-icon--sm" data-icon="rewind" aria-hidden="true"></span>
+                            </button>
+                          </div>
+
+                          <audio id="trackLyricsSyncAudio" class="publish-sync-audio" preload="metadata"></audio>
+
+                          <div class="publish-tap-sync-tools">
+                            <label class="publish-tap-sync-volume">
+                              <span class="publish-tap-sync-line-label">Громкость</span>
+                              <input id="trackLyricsSyncVolume" type="range" min="0" max="100" step="1" value="100" />
+                              <strong id="trackLyricsSyncVolumeValue">100%</strong>
+                            </label>
+                            <div class="publish-tap-sync-speed-note">Скорость фиксирована: 1x</div>
+                          </div>
+
+                          <div class="publish-sync-toolbar">
+                            <button id="trackLyricsSyncStartBtn" class="ghost" type="button">Начать по Enter</button>
+                            <button id="trackLyricsSyncNextBtn" class="ghost" type="button" disabled>Следующая строка</button>
+                            <button id="trackLyricsSyncUndoBtn" class="ghost" type="button" disabled>Отменить</button>
+                            <button id="trackLyricsSyncClearBtn" class="ghost" type="button">Очистить</button>
+                          </div>
+
+                          <p id="trackLyricsSyncHint" class="muted publish-tap-sync-help">Разбей текст песни по строкам, включи предпрослушивание и жми Enter или кнопку «Следующая строка» в момент начала каждой строки.</p>
+                        </div>
+
+                        <label>
+                          Синхронизированный текст (LRC / Enhanced LRC / JSON)
+                          <textarea
+                            id="trackLyricsSyncText"
+                            class="publish-sync-field"
+                            rows="6"
+                            maxlength="40000"
+                            placeholder="[00:12.00] Первая строка&#10;[00:18.40] Вторая строка"
+                          ></textarea>
+                          <small>Поддерживаются обычный LRC, Enhanced LRC и JSON. Tap sync здесь автоматически собирает обычный LRC по строкам, а потом тайминги можно подправить вручную.</small>
+                        </label>
+                      </div>
+                    </details>
+                  </section>
+                </div>
+
+                <div class="publish-form-column publish-form-side">
+                  <section class="publish-section-card">
+                    <h3>Файлы</h3>
+                    <label>
+                      Обложка (PNG/JPG/GIF)
+                      <input id="trackCover" type="file" accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif" required />
+                      <small>PNG/JPG автоматически приводятся к квадрату 500x500. GIF сохраняется как есть, чтобы не терялась анимация.</small>
+                    </label>
+
+                    <label>
+                      Аудиофайл (MP3 и WAV)
+                      <input id="trackFile" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required />
+                    </label>
+                  </section>
+
+                  <section class="publish-section-card publish-hint-card">
+                    <h3>Что получится после публикации</h3>
+                    <ul class="publish-checklist">
+                      <li><span data-icon="track"></span>Отдельная страница трека со всей информацией</li>
+                      <li><span data-icon="lyrics"></span>Текст отобразится сразу, даже без синхронизации</li>
+                      <li><span data-icon="spark"></span>Синхронизацию можно сделать сразу через tap sync и при желании уточнить позже</li>
+                    </ul>
+                  </section>
+                </div>
+              </div>
+
+              <div class="publish-submit-row">
+                <button id="uploadBtn" type="submit">Опубликовать</button>
+              </div>
+            </form>
+
+            <form id="albumForm" class="upload-form hidden publish-form-card" data-publish-panel="album">
+              <div class="publish-form-head">
+                <div class="publish-form-title">
+                  <span class="publish-form-icon" data-icon="album"></span>
+                  <div>
+                    <h2>Новый альбом</h2>
+                    <p>Собери один релиз из готовых треков и новых файлов с нормальным треклистом.</p>
+                  </div>
+                </div>
+                <span class="publish-form-badge">Релиз</span>
+              </div>
+
+              <div class="publish-form-grid">
+                <div class="publish-form-column">
+                  <section class="publish-section-card">
+                    <h3>Информация об альбоме</h3>
+                    <div class="sub-grid">
+                      <label>
+                        Название альбома
+                        <input id="albumTitle" type="text" maxlength="120" required />
+                      </label>
+
+                      <label>
+                        Жанр
+                        <input id="albumGenre" type="text" maxlength="60" required />
+                      </label>
+                    </div>
+
+                    <label>
+                      Описание альбома
+                      <textarea id="albumDescription" rows="5" maxlength="1000"></textarea>
+                    </label>
+
+                    <label>
+                      Хештеги (до 5, через запятую)
+                      <input id="albumHashtags" type="text" maxlength="300" placeholder="Например: release, trap, 2026" />
+                    </label>
+                  </section>
+
+                  <section class="publish-section-card">
+                    <h3>Команда релиза</h3>
+                    <label>
+                      Авторы (через запятую)
+                      <input id="albumAuthors" type="text" maxlength="500" placeholder="Например: sfera, guest" />
+                    </label>
+
+                    <label>
+                      Продюсеры / Битмейкеры (через запятую)
+                      <input id="albumProducers" type="text" maxlength="500" placeholder="Например: producer1, producer2" />
+                    </label>
+                  </section>
+
+                  <section class="publish-section-card">
+                    <div class="album-track-picker">
+                      <div class="album-track-picker-head">
+                        <strong>Выбери треки для альбома</strong>
+                        <div id="albumTracksInfo" class="muted">Загрузка списка треков...</div>
+                      </div>
+
+                      <div class="album-track-picker-controls">
+                        <input
+                          id="albumTracksSearchInput"
+                          type="search"
+                          maxlength="120"
+                          placeholder="Поиск по названию, авторам, продюсерам, жанру"
+                          autocomplete="off"
+                        />
+                        <select id="albumTracksSortSelect">
+                          <option value="newest">Сначала новые</option>
+                          <option value="oldest">Сначала старые</option>
+                          <option value="title_asc">По названию (А-Я)</option>
+                          <option value="title_desc">По названию (Я-А)</option>
+                        </select>
+                        <div class="album-track-filter-group">
+                          <button id="albumTracksFilterAllBtn" class="ghost album-track-filter active" type="button">Все</button>
+                          <button id="albumTracksFilterSelectedBtn" class="ghost album-track-filter" type="button">Выбранные</button>
+                        </div>
+                      </div>
+
+                      <div id="albumTracksList" class="simple-list album-track-options-list"></div>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="publish-form-column publish-form-side">
+                  <section class="publish-section-card">
+                    <h3>Файлы и треклист</h3>
+                    <label>
+                      Обложка альбома (PNG/JPG/GIF, необязательно)
+                      <input id="albumCover" type="file" accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif" />
+                      <small>PNG/JPG приводятся к квадрату 500x500. GIF остаётся анимированным.</small>
+                    </label>
+
+                    <label>
+                      Загрузить треки для альбома с компьютера (MP3/WAV)
+                      <input id="albumTrackFiles" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" multiple />
+                      <small>Можно выбрать несколько файлов и комбинировать их с уже загруженными треками.</small>
+                    </label>
+                    <div id="albumTrackFilesSummary" class="muted">Новых файлов не выбрано</div>
+                  </section>
+
+                  <section class="publish-section-card publish-hint-card">
+                    <h3>Как это работает</h3>
+                    <ul class="publish-checklist">
+                      <li><span data-icon="album"></span>Можно смешивать уже загруженные треки и новые файлы</li>
+                      <li><span data-icon="track"></span>Треклист собирается в одном месте без путаницы</li>
+                      <li><span data-icon="spark"></span>Обложка и описание применяются ко всему релизу</li>
+                    </ul>
+                  </section>
+                </div>
+              </div>
+
+              <div class="publish-submit-row">
+                <button id="albumPublishBtn" type="submit">Опубликовать альбом</button>
+              </div>
+            </form>
+
+            <form id="beatForm" class="upload-form hidden publish-form-card" data-publish-panel="beat">
+              <div class="publish-form-head">
+                <div class="publish-form-title">
+                  <span class="publish-form-icon" data-icon="beat"></span>
+                  <div>
+                    <h2>Новый бит</h2>
+                    <p>Подготовь бит как полноценный продукт: с параметрами, файлами и лицензиями.</p>
+                  </div>
+                </div>
+                <span class="publish-form-badge">Beat</span>
+              </div>
+
+              <div class="publish-form-grid">
+                <div class="publish-form-column">
+                  <section class="publish-section-card">
+                    <h3>Основное</h3>
+                    <label>
+                      Название бита
+                      <input id="beatTitle" type="text" maxlength="120" required />
+                    </label>
+
+                    <label>
+                      Стиль / жанр бита
+                      <input id="beatGenre" type="text" maxlength="60" placeholder="Например: Trap, Drill, Jersey" />
+                    </label>
+
+                    <div class="sub-grid">
+                      <label>
+                        BPM (скорость)
+                        <input id="beatBpm" type="number" min="1" max="400" step="1" required />
+                      </label>
+                      <label>
+                        Корневая нота
+                        <input id="beatRootNote" type="text" maxlength="12" placeholder="Например: C#m" required />
+                      </label>
+                    </div>
+
+                    <label>
+                      Хештеги (до 5, через запятую)
+                      <input id="beatHashtags" type="text" maxlength="300" placeholder="Например: trap, hard, dark" />
+                    </label>
+
+                    <label>
+                      Описание бита
+                      <textarea id="beatDescription" rows="5" maxlength="1000"></textarea>
+                    </label>
+                  </section>
+
+                  <section class="publish-section-card">
+                    <div class="beat-license-block">
+                      <div class="beat-license-head">
+                        <strong>Лицензии и цены</strong>
+                        <label class="beat-currency-inline">
+                          Валюта
+                          <select id="beatLicenseCurrency">
+                            <option value="RUB">RUB ₽</option>
+                            <option value="USD">USD $</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <label class="beat-license-row">
+                        <input id="beatLicenseMp3Enabled" type="checkbox" checked />
+                        <span>MP3 Lease</span>
+                        <input id="beatLicenseMp3Price" type="number" min="0" step="1" placeholder="Цена" />
+                      </label>
+
+                      <label class="beat-license-row">
+                        <input id="beatLicenseWavEnabled" type="checkbox" />
+                        <span>WAV Lease</span>
+                        <input id="beatLicenseWavPrice" type="number" min="0" step="1" placeholder="Цена" />
+                      </label>
+
+                      <label class="beat-license-row">
+                        <input id="beatLicenseTrackoutEnabled" type="checkbox" />
+                        <span>Trackout</span>
+                        <input id="beatLicenseTrackoutPrice" type="number" min="0" step="1" placeholder="Цена" />
+                      </label>
+
+                      <label class="beat-license-row">
+                        <input id="beatLicenseExclusiveEnabled" type="checkbox" />
+                        <span>Exclusive</span>
+                        <input id="beatLicenseExclusivePrice" type="number" min="0" step="1" placeholder="Цена" />
+                      </label>
+                    </div>
+                  </section>
+                </div>
+
+                <div class="publish-form-column publish-form-side">
+                  <section class="publish-section-card">
+                    <h3>Файлы</h3>
+                    <label>
+                      Обложка бита (PNG/JPG/GIF)
+                      <input id="beatCover" type="file" accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif" required />
+                    </label>
+
+                    <label>
+                      Файл бита (MP3/WAV)
+                      <input id="beatFile" type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" required />
+                    </label>
+                  </section>
+
+                  <section class="publish-section-card publish-hint-card">
+                    <h3>Для чего это всё</h3>
+                    <ul class="publish-checklist">
+                      <li><span data-icon="beat"></span>BPM и корневая нота сразу видны артистам</li>
+                      <li><span data-icon="spark"></span>Лицензии оформлены отдельно и без путаницы</li>
+                      <li><span data-icon="track"></span>Бит можно слушать, лайкать и покупать как полноценный релиз</li>
+                    </ul>
+                  </section>
+                </div>
+              </div>
+
+              <div class="publish-submit-row">
+                <button id="beatPublishBtn" type="submit">Опубликовать бит</button>
+              </div>
+            </form>
+          </div>
         </div>
       </section>
 
@@ -492,11 +931,11 @@
           <div id="feedSearchResults" class="search-results hidden"></div>
 
           <div class="section-toggle-row">
-            <button id="toggleFeedSelectionsBtn" class="ghost section-toggle-btn" type="button">Скрыть подборки</button>
+            <button id="toggleFeedSelectionsBtn" class="ghost section-toggle-btn" type="button">Показать подборки</button>
             <button id="toggleFeedLibraryBtn" class="ghost section-toggle-btn" type="button">Скрыть библиотеку</button>
           </div>
 
-          <div id="feedSelectionsWrap" class="sub-grid">
+          <div id="feedSelectionsWrap" class="sub-grid hidden">
             <div class="card">
               <h3 id="selectionPopularTitle">Подборка: Популярное</h3>
               <div id="selectionPopular" class="selection-list"></div>
@@ -549,7 +988,7 @@
 
           <div class="sub-grid">
             <div class="card">
-              <h3>Аккаунт</h3>
+              <h3 id="settingsAccountTitle">Аккаунт</h3>
 
               <div id="authGuest">
                 <form id="registerForm" class="mini-form">
@@ -632,12 +1071,13 @@
                     <input id="promoCodeInput" type="text" maxlength="64" placeholder="Например: BEATOON2026" required />
                   </label>
                   <button type="submit">Активировать промокод</button>
+                  <p id="promoCodeStatusInfo" class="muted promo-status-note"></p>
                 </form>
               </div>
             </div>
 
             <div class="card">
-              <h3>Эквалайзер плеера</h3>
+              <h3 id="settingsEqualizerTitle">Эквалайзер плеера</h3>
               <p class="muted">Слева самые низкие частоты, справа самые высокие. Диапазон: от -12 dB до +12 dB.</p>
               <div class="equalizer-presets-row">
                 <label class="equalizer-preset-label">
@@ -696,7 +1136,7 @@
 
           <div class="sub-grid">
             <div class="card">
-              <h3>Подписки</h3>
+              <h3 id="settingsSubscriptionsTitle">Подписки</h3>
               <div id="friendsGuest" class="muted hidden">Войди в аккаунт, чтобы подписываться на пользователей.</div>
 
               <div id="friendsAuth" class="hidden">
@@ -729,7 +1169,7 @@
             </div>
 
             <div class="card">
-              <h3>Личные сообщения</h3>
+              <h3 id="settingsMessagesTitle">Личные сообщения</h3>
               <div id="messagesGuest" class="muted hidden">Войди в аккаунт, чтобы писать сообщения.</div>
 
               <div id="messagesAuth" class="hidden">
@@ -752,23 +1192,161 @@
             </div>
 
             <div class="card">
-              <h3>Слушал недавно</h3>
+              <h3 id="settingsRecentTitle">Слушал недавно</h3>
               <div id="listenHistoryList" class="simple-list"></div>
             </div>
 
-            <div class="card">
-              <h3>Связь с нами</h3>
-              <button id="contactToggleBtn" class="ghost" type="button">Связь с нами</button>
-              <div id="contactPanel" class="simple-item hidden">
-                <p><strong>Почта:</strong> <a class="user-link" href="mailto:loumyloumy156@gmail.com">loumyloumy156@gmail.com</a></p>
-                <button
-                  id="contactTelegramBtn"
-                  class="ghost"
-                  type="button"
-                  data-url="https://t.me/sferaoff"
-                >
-                  Telegram
-                </button>
+            <div id="settingsAdminCard" class="card admin-center-card hidden">
+              <div class="admin-center-head">
+                <div class="admin-center-copy">
+                  <h3 id="settingsAdminTitle">Админ-центр</h3>
+                  <p class="muted">Жалобы, баны, поиск по пользователям и трекам, поддержка и контроль за состоянием хранилища сервера.</p>
+                </div>
+                <div class="inline-actions admin-center-actions">
+                  <button id="adminCenterRefreshBtn" class="ghost" type="button">Обновить центр</button>
+                  <button id="adminCenterOpenSupportBtn" class="ghost" type="button">Поддержка</button>
+                </div>
+              </div>
+
+              <div id="adminCenterStats" class="admin-center-stats"></div>
+
+              <div class="admin-center-tabs" role="tablist" aria-label="Секции админ-панели">
+                <button type="button" class="ghost admin-center-tab active" data-admin-center-section="overview">Обзор</button>
+                <button type="button" class="ghost admin-center-tab" data-admin-center-section="storage">Память</button>
+                <button type="button" class="ghost admin-center-tab" data-admin-center-section="reports">Жалобы</button>
+                <button type="button" class="ghost admin-center-tab" data-admin-center-section="users">Пользователи</button>
+                <button type="button" class="ghost admin-center-tab" data-admin-center-section="tracks">Треки</button>
+                <button type="button" class="ghost admin-center-tab" data-admin-center-section="support">Поддержка</button>
+              </div>
+
+              <section id="adminCenterOverviewPanel" class="admin-center-panel" data-admin-center-panel="overview">
+                <div id="adminOverviewGrid" class="admin-overview-grid"></div>
+              </section>
+
+              <section id="adminCenterStoragePanel" class="admin-center-panel hidden" data-admin-center-panel="storage">
+                <div id="adminStoragePanel" class="admin-storage-panel"></div>
+              </section>
+
+              <section id="adminCenterReportsPanel" class="admin-center-panel hidden" data-admin-center-panel="reports">
+                <div class="admin-center-toolbar">
+                  <label class="admin-filter-field">
+                    <span>Статус</span>
+                    <select id="adminReportsStatusFilter">
+                      <option value="open">Открытые</option>
+                      <option value="all">Все</option>
+                      <option value="resolved">Решённые</option>
+                      <option value="dismissed">Отклонённые</option>
+                    </select>
+                  </label>
+                  <form id="adminReportsSearchForm" class="admin-search-form">
+                    <input id="adminReportsSearchInput" type="search" maxlength="120" placeholder="Поиск по причине, объекту или репортёру" autocomplete="off" />
+                    <button type="submit" class="ghost">Найти</button>
+                  </form>
+                </div>
+                <div id="adminReportsList" class="admin-results-list"></div>
+              </section>
+
+              <section id="adminCenterUsersPanel" class="admin-center-panel hidden" data-admin-center-panel="users">
+                <div class="admin-center-toolbar">
+                  <label class="admin-filter-field">
+                    <span>Фильтр</span>
+                    <select id="adminUsersFilter">
+                      <option value="all">Все</option>
+                      <option value="banned">Забаненные</option>
+                      <option value="admins">Админы</option>
+                    </select>
+                  </label>
+                  <form id="adminUsersSearchForm" class="admin-search-form">
+                    <input id="adminUsersSearchInput" type="search" maxlength="120" placeholder="Никнейм, email, bio или id" autocomplete="off" />
+                    <button type="submit" class="ghost">Найти</button>
+                  </form>
+                </div>
+                <div id="adminUsersList" class="admin-results-list"></div>
+              </section>
+
+              <section id="adminCenterTracksPanel" class="admin-center-panel hidden" data-admin-center-panel="tracks">
+                <div class="admin-center-toolbar">
+                  <label class="admin-filter-field">
+                    <span>Тип</span>
+                    <select id="adminTracksFilter">
+                      <option value="all">Все</option>
+                      <option value="tracks">Треки</option>
+                      <option value="beats">Биты</option>
+                    </select>
+                  </label>
+                  <form id="adminTracksSearchForm" class="admin-search-form">
+                    <input id="adminTracksSearchInput" type="search" maxlength="120" placeholder="Название, жанр, автор, продюсер или id" autocomplete="off" />
+                    <button type="submit" class="ghost">Найти</button>
+                  </form>
+                </div>
+                <div id="adminTracksList" class="admin-results-list"></div>
+              </section>
+
+              <section id="adminCenterSupportPanel" class="admin-center-panel hidden" data-admin-center-panel="support">
+                <div class="admin-center-support-head">
+                  <p class="muted">Здесь быстрый список последних обращений. Для полной переписки откроется блок поддержки ниже.</p>
+                  <button id="adminCenterOpenSupportInlineBtn" class="ghost" type="button">Открыть inbox поддержки</button>
+                </div>
+                <div id="adminSupportPreviewList" class="admin-results-list"></div>
+              </section>
+            </div>
+
+            <div id="settingsContactCard" class="card settings-support-card">
+              <div class="settings-support-head">
+                <div class="settings-support-copy">
+                  <h3 id="settingsContactTitle">Связь с нами</h3>
+                  <p class="muted support-contact-intro">Быстрые контакты и переписка с поддержкой в одном аккуратном блоке.</p>
+                </div>
+                <button id="contactToggleBtn" class="ghost" type="button">Открыть поддержку</button>
+              </div>
+              <div id="contactPanel" class="hidden support-contact-panel">
+                <div class="support-contact-grid">
+                  <a class="support-contact-link" href="mailto:loumyloumy156@gmail.com">
+                    <span class="muted">Почта</span>
+                    <strong>loumyloumy156@gmail.com</strong>
+                  </a>
+                  <button
+                    id="contactTelegramBtn"
+                    class="ghost support-contact-link support-contact-link-button"
+                    type="button"
+                    data-url="https://t.me/sferaoff"
+                  >
+                    <span class="muted">Telegram</span>
+                    <strong>@sferaoff</strong>
+                  </button>
+                </div>
+                <div id="supportGuest" class="muted hidden">Войди в аккаунт, чтобы написать в поддержку.</div>
+                <div id="supportUserPanel" class="hidden support-thread-pane">
+                  <div class="support-section-header">
+                    <h4>Написать в поддержку</h4>
+                    <p class="muted">Сообщения попадут напрямую администраторам.</p>
+                  </div>
+                  <div id="supportUserChatList" class="chat-list"></div>
+                  <form id="supportUserForm" class="message-form">
+                    <input id="supportUserInput" type="text" maxlength="2000" placeholder="Сообщение в поддержку" required />
+                    <button type="submit">Отправить</button>
+                  </form>
+                </div>
+                <div id="supportAdminPanel" class="hidden support-thread-pane">
+                  <div class="support-section-header">
+                    <h4>Запросы в поддержку</h4>
+                    <p class="muted">Ответы администраторов отправляются прямо пользователю.</p>
+                  </div>
+                  <div class="support-admin-grid">
+                    <div class="support-admin-inbox">
+                      <div class="support-subsection-title">Обращения</div>
+                      <div id="supportThreadsList" class="simple-list compact-user-list"></div>
+                    </div>
+                    <div class="support-admin-thread">
+                      <p id="supportAdminThreadTitle" class="muted">Выберите обращение слева.</p>
+                      <div id="supportAdminChatList" class="chat-list"></div>
+                      <form id="supportAdminForm" class="message-form">
+                        <input id="supportAdminInput" type="text" maxlength="2000" placeholder="Ответ пользователю" required />
+                        <button type="submit">Ответить</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -810,7 +1388,9 @@
           </div>
           <div class="notifications-modal-actions">
             <button id="notificationsReadAllBtn" class="ghost" type="button">Прочитать все</button>
-            <button id="notificationsModalCloseBtn" class="ghost notifications-modal-close" type="button" aria-label="Закрыть окно уведомлений">✕</button>
+            <button id="notificationsModalCloseBtn" class="ghost notifications-modal-close sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Закрыть окно уведомлений">
+              <span class="sf-icon sf-icon--sm" data-icon="close" aria-hidden="true"></span>
+            </button>
           </div>
         </div>
         <div id="notificationsFilters" class="notifications-filters" role="tablist" aria-label="Фильтры уведомлений">
@@ -830,7 +1410,9 @@
             <h3 id="messagesModalTitle">Диалог</h3>
             <p id="messagesModalSubtitle" class="muted">Личная переписка</p>
           </div>
-          <button id="messagesModalCloseBtn" class="ghost messages-modal-close" type="button" aria-label="Закрыть окно сообщений">✕</button>
+          <button id="messagesModalCloseBtn" class="ghost messages-modal-close sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Закрыть окно сообщений">
+            <span class="sf-icon sf-icon--sm" data-icon="close" aria-hidden="true"></span>
+          </button>
         </div>
         <div id="messagesModalChatList" class="chat-list messages-modal-chat-list"></div>
         <form id="messagesModalSendForm" class="message-form messages-modal-form">
@@ -849,11 +1431,11 @@
           </div>
           <button
             id="albumModalCloseBtn"
-            class="ghost album-modal-close"
+            class="ghost album-modal-close sf-icon-btn sf-icon-btn--icon-only"
             type="button"
             aria-label="Закрыть альбом"
           >
-            ✕
+            <span class="sf-icon sf-icon--sm" data-icon="close" aria-hidden="true"></span>
           </button>
         </div>
         <div class="album-modal-content">
@@ -879,16 +1461,16 @@
         </div>
 
         <div class="player-controls">
-          <button id="playerPrevBtn" class="ghost" type="button" aria-label="Предыдущий трек">⏮</button>
-          <button id="playerPlayBtn" class="ghost" type="button" aria-label="Воспроизвести">▶</button>
-          <button id="playerPauseBtn" class="ghost" type="button" aria-label="Пауза">⏸</button>
-          <button id="playerNextBtn" class="ghost" type="button" aria-label="Следующий трек">⏭</button>
+          <button id="playerPrevBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Предыдущий трек"><span class="sf-icon sf-icon--sm" data-icon="prev" aria-hidden="true"></span></button>
+          <button id="playerPlayBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Воспроизвести"><span class="sf-icon sf-icon--sm" data-icon="play" aria-hidden="true"></span></button>
+          <button id="playerNextBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Следующий трек"><span class="sf-icon sf-icon--sm" data-icon="next" aria-hidden="true"></span></button>
+          <button id="playerLyricsBtn" class="ghost player-lyrics-btn sf-icon-btn" type="button" aria-label="Открыть текст песни"><span class="sf-icon sf-icon--sm" data-icon="lyrics" aria-hidden="true"></span><span class="sf-icon-btn-label">Текст</span></button>
           <button id="playerExpandBtn" class="ghost player-expand-btn" type="button" aria-label="Развернуть плеер">▾</button>
-          <button id="playerStopBtn" class="ghost" type="button" aria-label="Остановить" data-player-advanced="1">⏹</button>
-          <button id="playerShuffleBtn" class="ghost" type="button" aria-label="Перемешать" data-player-advanced="1">🔀</button>
-          <button id="playerRepeatAllBtn" class="ghost" type="button" aria-label="Повтор списка" data-player-advanced="1">🔁</button>
-          <button id="playerRepeatOneBtn" class="ghost" type="button" aria-label="Повтор одного трека" data-player-advanced="1">🔂</button>
-          <button id="playerCloseBtn" class="ghost" type="button" aria-label="Закрыть плеер">✕</button>
+          <button id="playerStopBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Остановить" data-player-advanced="1"><span class="sf-icon sf-icon--sm" data-icon="stop" aria-hidden="true"></span></button>
+          <button id="playerShuffleBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Перемешать" data-player-advanced="1"><span class="sf-icon sf-icon--sm" data-icon="shuffle" aria-hidden="true"></span></button>
+          <button id="playerRepeatAllBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Повтор списка" data-player-advanced="1"><span class="sf-icon sf-icon--sm" data-icon="repeat" aria-hidden="true"></span></button>
+          <button id="playerRepeatOneBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Повтор одного трека" data-player-advanced="1"><span class="sf-icon sf-icon--sm" data-icon="repeat-one" aria-hidden="true"></span></button>
+          <button id="playerCloseBtn" class="ghost sf-icon-btn sf-icon-btn--icon-only" type="button" aria-label="Закрыть плеер"><span class="sf-icon sf-icon--sm" data-icon="close" aria-hidden="true"></span></button>
         </div>
 
         <label class="player-volume">
@@ -901,22 +1483,27 @@
           <input id="playerSeekSlider" type="range" min="0" max="1000" step="1" value="0" />
           <span id="playerDuration">0:00</span>
         </div>
+
+        <div id="playerExpandedContent" class="player-expanded-content hidden" aria-live="polite"></div>
       </div>
       <audio id="globalPlayerAudio" preload="metadata"></audio>
     </section>
-    <script src="/src/app/i18n/ui-i18n.js?v=20260303-fix1"></script>
+    <script src="/src/app/i18n/ui-i18n.js?v=20260316-audiolabel1"></script>
+    <script src="/src/app/ui/icon-kit.js?v=20260313-publishicons1"></script>
+    <script src="/src/app/ui/dialogs.js?v=20260316-dialogs1"></script>
     <script src="/src/app/api/client.js?v=20260303-fix1"></script>
-    <script src="/src/app/player/player-core.js?v=20260303-fix1"></script>
-    <script src="/src/app/feed/feed-core.js?v=20260303-fix1"></script>
-    <script src="/src/app/comments/comments-ui.js?v=20260303-fix1"></script>
-    <script src="/src/app/feed/feed-ui.js?v=20260303-fix1"></script>
-    <script src="/src/app/profile/profile-ui.js?v=20260303-fix1"></script>
-    <script src="/src/app/settings/settings-ui.js?v=20260303-fix1"></script>
+    <script src="/src/app/player/player-core.js?v=20260314-shufflehistory1"></script>
+    <script src="/src/app/feed/feed-core.js?v=20260314-feedcollapse2"></script>
+    <script src="/src/app/comments/comments-ui.js?v=20260316-dialogs1"></script>
+    <script src="/src/app/feed/feed-ui.js?v=20260316-dialogs1"></script>
+    <script src="/src/app/profile/profile-ui.js?v=20260319-profilefix3"></script>
+    <script src="/src/app/settings/settings-ui.js?v=20260319-explicit1"></script>
     <script src="/src/app/realtime/realtime-core.js?v=20260303-fix1"></script>
-    <script src="/src/app/publish/publish-helpers.js?v=20260303-fix1"></script>
-    <script src="/src/app/publish/publish-album.js?v=20260303-fix1"></script>
-    <script src="/src/app/publish/publish-forms.js?v=20260303-fix1"></script>
-    <script src="/src/app/publish/publish-ui.js?v=20260303-fix1"></script>
-    <script src="/app.js?v=20260303-fix1"></script>
+    <script src="/src/app/publish/publish-helpers.js?v=20260316-syncplayer1"></script>
+    <script src="/src/app/publish/publish-album.js?v=20260313-albumlimit1"></script>
+    <script src="/src/app/publish/publish-forms.js?v=20260313-publishrefresh1"></script>
+    <script src="/src/app/publish/publish-ui.js?v=20260313-albumlimit1"></script>
+    <script src="/app.js?v=20260319-explicit1"></script>
+    <script src="/src/app/ui/intro-overlay.js?v=20260314-intro2"></script>
   </body>
 </html>

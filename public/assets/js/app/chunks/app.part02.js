@@ -164,6 +164,14 @@ const __sferaPlayerCore = window.SferaPlayerCore.createAppPlayerCore({
     setImageWithFallback,
     getTrackAuthorsLabel,
     createUserLinkNode,
+    buildTrackHref,
+    setStatus,
+    renderCommentNode,
+    createComment,
+    toggleTrackReaction,
+    toggleTrackRepost,
+    toggleFollow,
+    ensureAuthenticatedAction,
     refreshListenHistory,
     renderListenHistory,
     refreshAuthorAnalytics,
@@ -294,6 +302,14 @@ function reconcilePlayerQueue(...args) {
   return __sferaPlayerCore.reconcilePlayerQueue(...args);
 }
 
+function clearShufflePlaybackState(...args) {
+  return __sferaPlayerCore.clearShufflePlaybackState(...args);
+}
+
+function resetShufflePlaybackState(...args) {
+  return __sferaPlayerCore.resetShufflePlaybackState(...args);
+}
+
 function syncPlayerExpandedUi(...args) {
   return __sferaPlayerCore.syncPlayerExpandedUi(...args);
 }
@@ -304,6 +320,14 @@ function setPlayerExpanded(...args) {
 
 function togglePlayerExpanded(...args) {
   return __sferaPlayerCore.togglePlayerExpanded(...args);
+}
+
+function openLyricsOverlay(...args) {
+  return __sferaPlayerCore.openLyricsOverlay(...args);
+}
+
+function renderExpandedPlayerContent(...args) {
+  return __sferaPlayerCore.renderExpandedPlayerContent(...args);
 }
 
 function renderEqualizerControls() {
@@ -428,7 +452,6 @@ function setupGlobalPlayer() {
     !elements.playerCurrentTime ||
     !elements.playerDuration ||
     !elements.playerPlayBtn ||
-    !elements.playerPauseBtn ||
     !elements.playerStopBtn ||
     !elements.playerNextBtn ||
     !elements.playerPrevBtn ||
@@ -483,6 +506,20 @@ function setupGlobalPlayer() {
     updateSeekUi();
   });
 
+  elements.globalPlayerAudio.addEventListener("error", async () => {
+    const currentTrackId = getCurrentTrackId();
+    const track = currentTrackId ? getTrackById(currentTrackId) : null;
+    const title = track && track.title ? `: ${track.title}` : "";
+    setStatus(`Аудиофайл недоступен${title}`, "error");
+    updateSeekUi();
+    updateTrackPlayButtons();
+    updateGlobalPlayerButtons();
+
+    if (Array.isArray(state.player.queue) && state.player.queue.length > 1) {
+      await playNextTrack();
+    }
+  });
+
   elements.globalPlayerAudio.addEventListener("ratechange", () => {
     if (elements.globalPlayerAudio.playbackRate !== 1) {
       elements.globalPlayerAudio.playbackRate = 1;
@@ -510,11 +547,14 @@ function setupGlobalPlayer() {
   });
 
   elements.playerPlayBtn.addEventListener("click", () => {
-    playCurrentTrack();
-  });
-
-  elements.playerPauseBtn.addEventListener("click", () => {
-    pauseCurrentTrack();
+    if (!elements.globalPlayerAudio || !getCurrentTrackId()) {
+      return;
+    }
+    if (elements.globalPlayerAudio.paused) {
+      playCurrentTrack();
+    } else {
+      pauseCurrentTrack();
+    }
   });
 
   elements.playerStopBtn.addEventListener("click", () => {
@@ -527,6 +567,10 @@ function setupGlobalPlayer() {
 
   elements.playerPrevBtn.addEventListener("click", () => {
     playPreviousTrack();
+  });
+
+  elements.playerLyricsBtn?.addEventListener("click", () => {
+    openLyricsOverlay();
   });
 
   elements.playerExpandBtn?.addEventListener("click", () => {
@@ -546,6 +590,11 @@ function setupGlobalPlayer() {
 
   elements.playerShuffleBtn.addEventListener("click", () => {
     state.player.shuffle = !state.player.shuffle;
+    if (state.player.shuffle) {
+      resetShufflePlaybackState();
+    } else {
+      clearShufflePlaybackState();
+    }
     updateGlobalPlayerButtons();
   });
 

@@ -1,7 +1,7 @@
 (() => {
 const CHUNK_URLS = [
-  "/assets/js/public-profile/chunks/public-profile.part01.js?v=20260301-guest-uk1",
-  "/assets/js/public-profile/chunks/public-profile.part02.js?v=20260301-guest-uk1"
+  "/assets/js/public-profile/chunks/public-profile.part01.js?v=20260319-explicit1",
+  "/assets/js/public-profile/chunks/public-profile.part02.js?v=20260319-explicit1"
 ];
 
   async function loadSource() {

@@ -82,9 +82,6 @@ async function loadConversation(userId) {
 
 async function fullRefresh() {
   await refreshMe();
-  await refreshOnlineUsers().catch(() => {
-    // ignore transient online-counter errors
-  });
 
   if (state.user) {
     connectRealtimeSocket();
@@ -192,6 +189,124 @@ async function requestPasswordResetFromForm(form) {
   });
 }
 
+let passwordToggleUid = 0;
+
+function getPasswordToggleLabel(isVisible) {
+  return isVisible ? t("passwordHide") : t("passwordShow");
+}
+
+function syncPasswordToggleButton(input, button) {
+  if (!input || !button) {
+    return;
+  }
+
+  const isVisible = input.type === "text";
+  const label = getPasswordToggleLabel(isVisible);
+  button.dataset.visible = isVisible ? "1" : "0";
+  button.setAttribute("aria-pressed", isVisible ? "true" : "false");
+  button.setAttribute("aria-label", `${label} пароль`);
+  button.title = `${label} пароль`;
+
+  if (window.SferaIconKit?.setButtonIcon) {
+    window.SferaIconKit.setButtonIcon(button, isVisible ? "eye-off" : "eye", {
+      label,
+      labelClassName: "password-toggle-btn-label",
+      iconClassName: "sf-icon--sm"
+    });
+  } else {
+    button.textContent = label;
+  }
+}
+
+function resetPasswordVisibility(root = document) {
+  const inputs = Array.from(root.querySelectorAll("input[data-password-toggle-ready='1']"));
+  for (const input of inputs) {
+    if (input.type !== "password") {
+      input.type = "password";
+    }
+    const button = input.parentElement?.querySelector?.("button[data-password-toggle-btn='1']");
+    syncPasswordToggleButton(input, button);
+  }
+}
+
+function refreshPasswordVisibilityToggles(root = document) {
+  const inputs = Array.from(root.querySelectorAll("input[data-password-toggle-ready='1']"));
+  for (const input of inputs) {
+    const button = input.parentElement?.querySelector?.("button[data-password-toggle-btn='1']");
+    syncPasswordToggleButton(input, button);
+  }
+}
+
+function setupPasswordVisibilityToggles(root = document) {
+  const passwordInputs = Array.from(root.querySelectorAll("input[type='password'], input[data-password-toggle-ready='1']"));
+
+  for (const input of passwordInputs) {
+    if (!(input instanceof HTMLInputElement)) {
+      continue;
+    }
+
+    if (input.dataset.passwordToggleReady === "1") {
+      const existingButton = input.parentElement?.querySelector?.("button[data-password-toggle-btn='1']");
+      syncPasswordToggleButton(input, existingButton);
+      continue;
+    }
+
+    input.dataset.passwordToggleReady = "1";
+    if (!input.id) {
+      passwordToggleUid += 1;
+      input.id = `password-toggle-input-${passwordToggleUid}`;
+    }
+
+    let wrap = input.parentElement;
+    if (!wrap || !wrap.classList.contains("password-field-wrap")) {
+      wrap = document.createElement("div");
+      wrap.className = "password-field-wrap";
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "password-toggle-btn";
+    button.dataset.passwordToggleBtn = "1";
+    button.setAttribute("aria-controls", input.id);
+    button.addEventListener("click", () => {
+      const shouldShow = input.type === "password";
+      input.type = shouldShow ? "text" : "password";
+      syncPasswordToggleButton(input, button);
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        input.focus();
+      }
+      const length = String(input.value || "").length;
+      if (typeof input.setSelectionRange === "function") {
+        input.setSelectionRange(length, length);
+      }
+    });
+    wrap.appendChild(button);
+    syncPasswordToggleButton(input, button);
+
+    if (input.form && input.form.dataset.passwordToggleResetBound !== "1") {
+      input.form.dataset.passwordToggleResetBound = "1";
+      input.form.addEventListener("reset", () => {
+        const scheduler = typeof window.requestAnimationFrame === "function"
+          ? window.requestAnimationFrame.bind(window)
+          : (cb) => window.setTimeout(cb, 0);
+        scheduler(() => {
+          resetPasswordVisibility(input.form);
+        });
+      });
+    }
+  }
+}
+
+window.SferaPasswordToggles = {
+  setup: setupPasswordVisibilityToggles,
+  refresh: refreshPasswordVisibilityToggles,
+  reset: resetPasswordVisibility
+};
+
 function removeQueryParam(paramName) {
   const url = new URL(window.location.href);
   if (!url.searchParams.has(paramName)) {
@@ -226,7 +341,14 @@ async function processEmailActionTokensFromUrl() {
 
   if (resetToken) {
     try {
-      const newPassword = window.prompt("Введите новый пароль (минимум 6 символов)");
+      const newPassword = await window.SferaDialogs.prompt({
+        title: "Сброс пароля",
+        message: "Введите новый пароль длиной минимум 6 символов.",
+        value: "",
+        placeholder: "Новый пароль",
+        inputType: "password",
+        confirmText: "Сменить пароль"
+      });
       if (newPassword === null) {
         setStatus("Сброс пароля отменен", "error");
       } else {
@@ -317,10 +439,42 @@ function renderAuthGate() {
     if (elements.authGateLanguageSelect) {
       elements.authGateLanguageSelect.value = normalizeUiLanguage(state.uiLanguage, DEFAULT_UI_LANGUAGE);
     }
+    setAuthGatePanel("login");
     setAuthGateStatus("");
-    const firstInput = elements.authGateLoginForm?.querySelector("input[name='username']")
-      || elements.authGateRegisterForm?.querySelector("input[name='username']");
-    firstInput?.focus();
+    focusActiveAuthGatePanel();
+  }
+}
+
+let authGateActivePanel = "login";
+
+function getAuthGatePanelButtons() {
+  return Array.from(document.querySelectorAll("[data-auth-gate-tab]"));
+}
+
+function getAuthGatePanels() {
+  return Array.from(document.querySelectorAll(".auth-gate-form-panel[data-auth-gate-panel]"));
+}
+
+function focusActiveAuthGatePanel() {
+  const activePanel = document.querySelector(`.auth-gate-form-panel[data-auth-gate-panel='${authGateActivePanel}']`);
+  const firstInput = activePanel?.querySelector("input, textarea, select, button");
+  firstInput?.focus();
+}
+
+function setAuthGatePanel(nextPanel = "login") {
+  const allowed = new Set(["login", "register", "reset"]);
+  authGateActivePanel = allowed.has(nextPanel) ? nextPanel : "login";
+
+  for (const button of getAuthGatePanelButtons()) {
+    const isActive = String(button.dataset.authGateTab || "") === authGateActivePanel;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  }
+
+  for (const panel of getAuthGatePanels()) {
+    const isActive = String(panel.dataset.authGatePanel || "") === authGateActivePanel;
+    panel.classList.toggle("is-active", isActive);
+    panel.setAttribute("aria-hidden", isActive ? "false" : "true");
   }
 }
 
@@ -433,6 +587,15 @@ if (elements.authGatePasswordResetRequestForm) {
     }
   });
 }
+
+for (const button of getAuthGatePanelButtons()) {
+  button.addEventListener("click", () => {
+    setAuthGatePanel(String(button.dataset.authGateTab || "login"));
+    focusActiveAuthGatePanel();
+  });
+}
+
+setAuthGatePanel(authGateActivePanel);
 
 elements.logoutBtn.addEventListener("click", async () => {
   try {
@@ -665,8 +828,16 @@ if (elements.usersListSearchInput) {
 }
 
 if (elements.contactToggleBtn && elements.contactPanel) {
+  const syncContactToggleText = () => {
+    const lang = state.user?.uiLanguage || state.uiLanguage || "ru";
+    const isHidden = elements.contactPanel.classList.contains("hidden");
+    elements.contactToggleBtn.textContent = t(isHidden ? "contactOpen" : "contactHide", lang);
+  };
+
+  syncContactToggleText();
   elements.contactToggleBtn.addEventListener("click", () => {
     elements.contactPanel.classList.toggle("hidden");
+    syncContactToggleText();
   });
 }
 
@@ -948,7 +1119,11 @@ if (elements.profileShareBtn) {
       await navigator.clipboard.writeText(publicUrl);
       setStatus("Ссылка на профиль скопирована", "success");
     } catch {
-      window.prompt("Скопируй ссылку на профиль", publicUrl);
+      await window.SferaDialogs.copy({
+        title: "Ссылка на профиль",
+        message: "Скопируй ссылку вручную, если браузер не дал доступ к буферу.",
+        value: publicUrl
+      });
     }
   });
 }
@@ -1082,6 +1257,7 @@ async function init() {
     applyUiDensity(loadSavedUiDensity());
     setGuestMode(loadGuestMode());
     applyUiLanguage(resolvePreferredUiLanguage());
+    setupPasswordVisibilityToggles();
     setStatus("Загрузка...");
     showLoadingSkeletons();
     await processEmailActionTokensFromUrl();
@@ -1108,11 +1284,6 @@ async function init() {
     setStatus(error.message, "error");
   }
 
-  setInterval(() => {
-    refreshOnlineUsers().catch(() => {
-      // ignore transient polling errors
-    });
-  }, ONLINE_POLL_INTERVAL_MS);
 }
 
 init();

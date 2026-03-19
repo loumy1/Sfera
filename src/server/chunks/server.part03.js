@@ -4,17 +4,35 @@ async function processAudioFile(fileEntry) {
   let normalizedAudioMime = fileEntry.mimeType;
   let sourcePath = fileEntry.tempPath;
   let additionalTempPath = null;
+  let usedWavFallback = false;
 
   if (AUTO_CONVERT_WAV_TO_MP3 && normalizedAudioMime === "audio/wav") {
-    sourcePath = await withFfmpegQueue(() => convertWavFileToMp3(fileEntry.tempPath));
-    additionalTempPath = sourcePath;
-    normalizedAudioMime = "audio/mpeg";
+    try {
+      sourcePath = await withFfmpegQueue(() => convertWavFileToMp3(fileEntry.tempPath));
+      additionalTempPath = sourcePath;
+      normalizedAudioMime = "audio/mpeg";
+    } catch (error) {
+      const missingFfmpeg = error instanceof HttpError && /ffmpeg/i.test(String(error.message || ""));
+      if (!missingFfmpeg) {
+        throw error;
+      }
+      usedWavFallback = true;
+      sourcePath = fileEntry.tempPath;
+      normalizedAudioMime = "audio/wav";
+      additionalTempPath = null;
+    }
   }
 
   const finalSize = await getFileSize(sourcePath);
   if (finalSize > MAX_STORED_AUDIO_SIZE) {
     if (additionalTempPath) {
       await deleteFileSafe(additionalTempPath);
+    }
+    if (usedWavFallback) {
+      throw new HttpError(
+        413,
+        "WAV-файл слишком большой для сохранения без ffmpeg. Установите ffmpeg или загрузите MP3."
+      );
     }
     throw new HttpError(
       413,
@@ -30,8 +48,8 @@ async function processAudioFile(fileEntry) {
   };
 }
 
-async function ensureValidCoverUpload(fileEntry) {  if (!IMAGE_MIME_TYPES.has(fileEntry.mimeType)) {
-    throw new HttpError(400, "Обложка должна быть PNG или JPG");
+async function ensureValidCoverUpload(fileEntry) {  if (!COVER_IMAGE_MIME_TYPES.has(fileEntry.mimeType)) {
+    throw new HttpError(400, "Обложка должна быть PNG, JPG или GIF");
   }
 
   const coverSize = await getFileSize(fileEntry.tempPath);
@@ -44,6 +62,15 @@ async function ensureValidCoverUpload(fileEntry) {  if (!IMAGE_MIME_TYPES.has(fi
     extension: inferImageExtension(fileEntry.originalName, fileEntry.mimeType),
     mimeType: fileEntry.mimeType
   };
+}
+
+function buildMediaUrl(kind, fileName) {
+  const safeKind = String(kind || "").trim();
+  const safeFileName = String(fileName || "").trim();
+  if (!safeKind || !safeFileName) {
+    return null;
+  }
+  return `/api/media/${encodeURIComponent(safeKind)}?file=${encodeURIComponent(safeFileName)}`;
 }
 
 function ensureUserStructure(user) {
@@ -80,6 +107,7 @@ function ensureUserStructure(user) {
   }
 
   user.isAdmin = Boolean(user.isAdmin);
+  user.isVerifiedArtist = Boolean(user.isVerifiedArtist);
   user.isBanned = Boolean(user.isBanned);
 
   if (typeof user.banReason !== "string" && user.banReason !== null) {
@@ -96,6 +124,10 @@ function ensureUserStructure(user) {
 
   if (typeof user.adminGrantedAt !== "string" && user.adminGrantedAt !== null) {
     user.adminGrantedAt = null;
+  }
+
+  if (typeof user.verifiedArtistGrantedAt !== "string" && user.verifiedArtistGrantedAt !== null) {
+    user.verifiedArtistGrantedAt = null;
   }
 
   if (!Array.isArray(user.warnings)) {
@@ -248,6 +280,51 @@ function ensureTrackStructure(track) {
     track.hashtags = [];
   }
 
+  track.isExplicit = Boolean(track.isExplicit);
+
+  let normalizedLyrics = null;
+  try {
+    normalizedLyrics = normalizeTrackLyricsInput({
+      plain: track.lyricsPlain,
+      syncText: track.lyricsSyncText
+    });
+  } catch {
+    normalizedLyrics = {
+      plain: String(track.lyricsPlain || "").trim().slice(0, MAX_LYRICS_PLAIN_LENGTH),
+      syncText: "",
+      segments: [],
+      hasWordTimings: false
+    };
+  }
+  track.lyricsPlain = normalizedLyrics.plain;
+  track.lyricsSyncText = normalizedLyrics.syncText;
+  track.lyricsSegments = normalizedLyrics.segments;
+  track.lyricsHasWordTimings = normalizedLyrics.hasWordTimings;
+
+  let normalizedGenius = null;
+  try {
+    normalizedGenius = normalizeTrackGeniusInput({
+      songId: track.geniusSongId,
+      url: track.geniusUrl,
+      title: track.geniusTitle,
+      artist: track.geniusArtist,
+      imageUrl: track.geniusImageUrl
+    });
+  } catch {
+    normalizedGenius = {
+      songId: "",
+      url: "",
+      title: "",
+      artist: "",
+      imageUrl: ""
+    };
+  }
+  track.geniusSongId = normalizedGenius.songId;
+  track.geniusUrl = normalizedGenius.url;
+  track.geniusTitle = normalizedGenius.title;
+  track.geniusArtist = normalizedGenius.artist;
+  track.geniusImageUrl = normalizedGenius.imageUrl;
+
   track.kind = normalizeTrackKind(track.kind);
   track.beatBpm = sanitizeBeatBpm(track.beatBpm);
   track.beatRootNote = sanitizeBeatRootNote(track.beatRootNote);
@@ -348,6 +425,163 @@ function ensureMessageStructure(message) {
   if (typeof message.createdAt !== "string") {
     message.createdAt = new Date().toISOString();
   }
+
+  message.isSupport = Boolean(message.isSupport);
+
+  if (typeof message.supportUserId !== "string" && message.supportUserId !== null) {
+    message.supportUserId = null;
+  }
+
+  if (message.isSupport) {
+    const normalizedSupportUserId = String(
+      message.supportUserId || message.fromUserId || message.toUserId || ""
+    ).trim();
+    message.supportUserId = normalizedSupportUserId || null;
+  } else {
+    message.supportUserId = null;
+  }
+}
+
+function syncUsernameAcrossResources(input) {
+  if (!input || typeof input !== "object") {
+    return false;
+  }
+
+  const userId = String(input.userId || "").trim();
+  const nextUsername = String(input.username || "").trim();
+  if (!userId || !nextUsername) {
+    return false;
+  }
+
+  let changed = false;
+
+  for (const track of Array.isArray(input.tracks) ? input.tracks : []) {
+    ensureTrackStructure(track);
+    if (track.userId === userId && track.username !== nextUsername) {
+      track.username = nextUsername;
+      changed = true;
+    }
+    for (const comment of Array.isArray(track.comments) ? track.comments : []) {
+      ensureCommentStructure(comment);
+      if (comment.userId === userId && comment.username !== nextUsername) {
+        comment.username = nextUsername;
+        changed = true;
+      }
+    }
+  }
+
+  for (const playlist of Array.isArray(input.playlists) ? input.playlists : []) {
+    ensurePlaylistStructure(playlist);
+    if (playlist.userId === userId && playlist.username !== nextUsername) {
+      playlist.username = nextUsername;
+      changed = true;
+    }
+  }
+
+  for (const album of Array.isArray(input.albums) ? input.albums : []) {
+    ensureAlbumStructure(album);
+    if (album.userId === userId && album.username !== nextUsername) {
+      album.username = nextUsername;
+      changed = true;
+    }
+  }
+
+  for (const notification of Array.isArray(input.notifications) ? input.notifications : []) {
+    if (!ensureNotificationStructure(notification)) {
+      continue;
+    }
+    if (notification.actorUserId === userId && notification.actorUsername !== nextUsername) {
+      notification.actorUsername = nextUsername;
+      changed = true;
+    }
+    if (notification.peerUserId === userId && notification.peerUsername !== nextUsername) {
+      notification.peerUsername = nextUsername;
+      changed = true;
+    }
+  }
+
+  for (const warningTarget of Array.isArray(input.users) ? input.users : []) {
+    ensureUserStructure(warningTarget);
+    for (const warning of Array.isArray(warningTarget.warnings) ? warningTarget.warnings : []) {
+      if (warning?.actorUserId === userId && warning.actorUsername !== nextUsername) {
+        warning.actorUsername = nextUsername;
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
+function removeUserInteractionsFromTrack(track, userId) {
+  ensureTrackStructure(track);
+
+  const normalizedUserId = String(userId || "").trim();
+  if (!normalizedUserId) {
+    return false;
+  }
+
+  let changed = false;
+
+  const nextLikes = track.likes.filter((id) => id !== normalizedUserId);
+  if (nextLikes.length !== track.likes.length) {
+    track.likes = nextLikes;
+    changed = true;
+  }
+
+  const nextDislikes = track.dislikes.filter((id) => id !== normalizedUserId);
+  if (nextDislikes.length !== track.dislikes.length) {
+    track.dislikes = nextDislikes;
+    changed = true;
+  }
+
+  const removedCommentIds = new Set();
+  for (const comment of track.comments) {
+    ensureCommentStructure(comment);
+    if (comment.userId === normalizedUserId) {
+      removedCommentIds.add(comment.id);
+      changed = true;
+      continue;
+    }
+
+    const nextCommentLikes = comment.likes.filter((id) => id !== normalizedUserId);
+    if (nextCommentLikes.length !== comment.likes.length) {
+      comment.likes = nextCommentLikes;
+      changed = true;
+    }
+
+    const nextCommentDislikes = comment.dislikes.filter((id) => id !== normalizedUserId);
+    if (nextCommentDislikes.length !== comment.dislikes.length) {
+      comment.dislikes = nextCommentDislikes;
+      changed = true;
+    }
+  }
+
+  if (removedCommentIds.size > 0) {
+    track.comments = track.comments.filter((comment) => !removedCommentIds.has(comment.id));
+  }
+
+  if (changed) {
+    track.updatedAt = new Date().toISOString();
+  }
+
+  return changed;
+}
+
+function deleteSessionsForUser(sessionStore, userId) {
+  const normalizedUserId = String(userId || "").trim();
+  if (!sessionStore || typeof sessionStore !== "object" || !normalizedUserId) {
+    return false;
+  }
+
+  let changed = false;
+  for (const sid of Object.keys(sessionStore)) {
+    if (sessionStore[sid]?.userId === normalizedUserId) {
+      delete sessionStore[sid];
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function ensureNotificationStructure(notification) {
@@ -382,10 +616,12 @@ function ensureNotificationStructure(notification) {
 
   if (!notification.href) {
     if (notification.trackId) {
-      const base = notification.trackKind === "beat" ? "/b" : "/t";
-      notification.href = `${base}/${encodeURIComponent(notification.trackId)}`;
+      notification.href = buildTrackSharePath({
+        id: notification.trackId,
+        kind: notification.trackKind === "beat" ? "beat" : "song"
+      });
     } else if (notification.albumId) {
-      notification.href = `/a/${encodeURIComponent(notification.albumId)}`;
+      notification.href = buildAlbumSharePath({ id: notification.albumId });
     } else if (notification.actorUsername) {
       notification.href = `/u/${encodeURIComponent(notification.actorUsername)}`;
     } else {
@@ -558,10 +794,108 @@ function queueUserNotification(input) {
   });
 }
 
+function extractMentionedUsernames(text) {
+  const source = String(text || "");
+  if (!source) {
+    return [];
+  }
+
+  const result = [];
+  const seen = new Set();
+  const pattern = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_]{3,24})(?=$|[^a-zA-Z0-9_])/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const username = String(match[2] || "").trim().toLowerCase();
+    if (!username || seen.has(username)) {
+      continue;
+    }
+    seen.add(username);
+    result.push(username);
+  }
+
+  return result;
+}
+
+async function createMentionNotifications(input) {
+  if (!input || typeof input !== "object") {
+    return [];
+  }
+
+  const mentionedUsernames = extractMentionedUsernames(input.text);
+  if (mentionedUsernames.length === 0) {
+    return [];
+  }
+
+  const users = await readJson(USERS_FILE, []);
+  const usersByUsername = new Map();
+
+  for (const user of users) {
+    ensureUserStructure(user);
+    const key = String(user.username || "").trim().toLowerCase();
+    if (key && !usersByUsername.has(key)) {
+      usersByUsername.set(key, user);
+    }
+  }
+
+  const excludedUserIds = new Set(
+    [
+      input.actorUserId,
+      ...(Array.isArray(input.excludeUserIds) ? input.excludeUserIds : [])
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
+  const created = [];
+  for (const usernameKey of mentionedUsernames) {
+    const mentionedUser = usersByUsername.get(usernameKey);
+    if (!mentionedUser || excludedUserIds.has(mentionedUser.id)) {
+      continue;
+    }
+    excludedUserIds.add(mentionedUser.id);
+
+    const createdNotification = await createUserNotification({
+      userId: mentionedUser.id,
+      type: typeof input.type === "string" && input.type ? input.type : "mention",
+      action: typeof input.action === "string" ? input.action : null,
+      actorUserId: typeof input.actorUserId === "string" ? input.actorUserId : null,
+      actorUsername: typeof input.actorUsername === "string" ? input.actorUsername : null,
+      targetUserId: typeof input.targetUserId === "string" ? input.targetUserId : null,
+      peerUserId: typeof input.peerUserId === "string" ? input.peerUserId : null,
+      peerUsername: typeof input.peerUsername === "string" ? input.peerUsername : null,
+      trackId: typeof input.trackId === "string" ? input.trackId : null,
+      trackKind: typeof input.trackKind === "string" ? input.trackKind : null,
+      trackTitle: typeof input.trackTitle === "string" ? input.trackTitle : "",
+      albumId: typeof input.albumId === "string" ? input.albumId : null,
+      albumTitle: typeof input.albumTitle === "string" ? input.albumTitle : "",
+      commentId: typeof input.commentId === "string" ? input.commentId : null,
+      commentPreview: typeof input.commentPreview === "string" ? input.commentPreview : "",
+      messagePreview: typeof input.messagePreview === "string" ? input.messagePreview : "",
+      href: typeof input.href === "string" ? input.href : ""
+    });
+
+    if (createdNotification) {
+      created.push(createdNotification);
+    }
+  }
+
+  return created;
+}
+
+function queueMentionNotifications(input) {
+  createMentionNotifications(input).catch((error) => {
+    console.error("Mention notification enqueue failed:", error);
+  });
+}
+
 function buildTrackSharePath(track) {
   ensureTrackStructure(track);
-  const prefix = track.kind === "beat" ? "/b" : "/t";
-  return `${prefix}/${track.id}`;
+  const section = track.kind === "beat" ? "b" : "t";
+  return `/item-page.html?section=${section}&id=${encodeURIComponent(String(track.id || ""))}`;
+}
+
+function buildAlbumSharePath(album) {
+  return `/item-page.html?section=a&id=${encodeURIComponent(String(album?.id || ""))}`;
 }
 
 function ensureEmailTokenStoreStructure(store) {
@@ -1052,14 +1386,17 @@ function exposeUser(user) {
     id: user.id,
     username: user.username,
     bio: user.bio,
-    avatarUrl: user.avatarFileName ? `/uploads/profiles/${user.avatarFileName}` : null,
-    headerUrl: user.headerFileName ? `/uploads/profiles/${user.headerFileName}` : null,
+    avatarUrl: user.avatarFileName ? buildMediaUrl("profiles", user.avatarFileName) : null,
+    headerUrl: user.headerFileName ? buildMediaUrl("profiles", user.headerFileName) : null,
     reposts: user.reposts,
     followers: user.followers,
     following: user.following,
     pinnedTrackIds: user.pinnedTrackIds,
     usedPromoCodes: user.usedPromoCodes,
     isAdmin: Boolean(user.isAdmin),
+    adminGrantedAt: user.adminGrantedAt || null,
+    isVerifiedArtist: Boolean(user.isVerifiedArtist),
+    verifiedArtistGrantedAt: user.verifiedArtistGrantedAt || null,
     isBanned: Boolean(user.isBanned),
     banReason: user.banReason || null,
     bannedAt: user.bannedAt || null,
@@ -1082,12 +1419,14 @@ function toPublicUser(user, currentUser) {
     id: user.id,
     username: user.username,
     bio: user.bio,
-    avatarUrl: user.avatarFileName ? `/uploads/profiles/${user.avatarFileName}` : null,
-    headerUrl: user.headerFileName ? `/uploads/profiles/${user.headerFileName}` : null,
+    avatarUrl: user.avatarFileName ? buildMediaUrl("profiles", user.avatarFileName) : null,
+    headerUrl: user.headerFileName ? buildMediaUrl("profiles", user.headerFileName) : null,
     createdAt: user.createdAt,
     isSelf: isCurrent,
     isFollowing: Boolean(currentUser && currentUser.following.includes(user.id)),
     isFollower: Boolean(currentUser && currentUser.followers.includes(user.id)),
+    isVerifiedArtist: Boolean(user.isVerifiedArtist),
+    verifiedArtistGrantedAt: user.verifiedArtistGrantedAt || null,
     isBanned: Boolean(user.isBanned),
     banReason: viewerIsAdmin || isCurrent ? user.banReason || null : null,
     bannedAt: user.bannedAt || null,
@@ -1186,13 +1525,18 @@ function toTrackDto(track, context) {
 
   const trackOwner = usersById.get(track.userId);
   const trackAuthorAvatarUrl = trackOwner && trackOwner.avatarFileName
-    ? `/uploads/profiles/${trackOwner.avatarFileName}`
+    ? buildMediaUrl("profiles", trackOwner.avatarFileName)
     : null;
 
   const commentsTree = buildCommentsTree(track.comments, {
     currentUserId,
     trackAuthorId: track.userId,
-    trackAuthorAvatarUrl
+    trackAuthorAvatarUrl,
+    currentUserIsAdmin: Boolean(
+      currentUserId &&
+      usersById.get(currentUserId) &&
+      usersById.get(currentUserId).isAdmin
+    )
   });
 
   return {
@@ -1201,6 +1545,7 @@ function toTrackDto(track, context) {
     userId: track.userId,
     username: track.username,
     title: track.title,
+    isExplicit: Boolean(track.isExplicit),
     description: track.description,
     genre: track.genre,
     authors: track.authors,
@@ -1209,11 +1554,11 @@ function toTrackDto(track, context) {
     beatBpm: track.beatBpm,
     beatRootNote: track.beatRootNote,
     beatLicenses: track.beatLicenses,
-    audioUrl: `/uploads/audio/${track.audioFileName}`,
+    audioUrl: buildMediaUrl("audio", track.audioFileName),
     audioFileName: track.audioFileName,
     audioMimeType: track.audioMimeType,
     durationSec: track.durationSec,
-    coverUrl: track.coverFileName ? `/uploads/covers/${track.coverFileName}` : null,
+    coverUrl: track.coverFileName ? buildMediaUrl("covers", track.coverFileName) : null,
     coverFileName: track.coverFileName,
     coverMimeType: track.coverMimeType,
     likesCount: track.likes.length,
@@ -1236,6 +1581,21 @@ function toTrackDto(track, context) {
     premiereAt: track.premiereAt,
     isPremiereLive: isPremiereLive(track),
     sharePath: buildTrackSharePath(track),
+    lyrics: {
+      plain: track.lyricsPlain,
+      syncText: track.lyricsSyncText,
+      segments: track.lyricsSegments,
+      hasWordTimings: Boolean(track.lyricsHasWordTimings)
+    },
+    genius: track.geniusSongId || track.geniusUrl || track.geniusTitle || track.geniusArtist || track.geniusImageUrl
+      ? {
+          songId: track.geniusSongId || "",
+          url: track.geniusUrl || "",
+          title: track.geniusTitle || "",
+          artist: track.geniusArtist || "",
+          imageUrl: track.geniusImageUrl || ""
+        }
+      : null,
     createdAt: track.createdAt,
     updatedAt: track.updatedAt,
     isOwner: Boolean(currentUserId && track.userId === currentUserId)
@@ -1255,8 +1615,8 @@ function toPlaylistDto(playlist, context) {
       id: track.id,
       title: track.title,
       username: track.username,
-      coverUrl: track.coverFileName ? `/uploads/covers/${track.coverFileName}` : null,
-      audioUrl: `/uploads/audio/${track.audioFileName}`,
+      coverUrl: track.coverFileName ? buildMediaUrl("covers", track.coverFileName) : null,
+      audioUrl: buildMediaUrl("audio", track.audioFileName),
       kind: track.kind,
       sharePath: buildTrackSharePath(track)
     }));
@@ -1291,8 +1651,10 @@ function toAlbumDto(album, context) {
       id: track.id,
       title: track.title,
       username: track.username,
-      coverUrl: track.coverFileName ? `/uploads/covers/${track.coverFileName}` : null,
-      audioUrl: `/uploads/audio/${track.audioFileName}`,
+      authors: Array.isArray(track.authors) ? track.authors : [],
+      producers: Array.isArray(track.producers) ? track.producers : [],
+      coverUrl: track.coverFileName ? buildMediaUrl("covers", track.coverFileName) : null,
+      audioUrl: buildMediaUrl("audio", track.audioFileName),
       kind: track.kind,
       sharePath: buildTrackSharePath(track)
     }));
@@ -1312,10 +1674,10 @@ function toAlbumDto(album, context) {
     trackIds: visibleTrackIds,
     tracks,
     tracksCount: tracks.length,
-    coverUrl: album.coverFileName ? `/uploads/covers/${album.coverFileName}` : null,
+    coverUrl: album.coverFileName ? buildMediaUrl("covers", album.coverFileName) : null,
     coverFileName: album.coverFileName,
     coverMimeType: album.coverMimeType,
-    sharePath: `/a/${album.id}`,
+    sharePath: buildAlbumSharePath(album),
     createdAt: album.createdAt,
     updatedAt: album.updatedAt,
     isOwner: Boolean(currentUserId && album.userId === currentUserId)
@@ -1332,12 +1694,106 @@ function toMessageDto(message, usersById, currentUserId) {
     toUserId: message.toUserId,
     fromUsername: fromUser ? fromUser.username : "unknown",
     toUsername: toUser ? toUser.username : "unknown",
-    fromAvatarUrl: fromUser && fromUser.avatarFileName ? `/uploads/profiles/${fromUser.avatarFileName}` : null,
-    toAvatarUrl: toUser && toUser.avatarFileName ? `/uploads/profiles/${toUser.avatarFileName}` : null,
+    fromAvatarUrl: fromUser && fromUser.avatarFileName ? buildMediaUrl("profiles", fromUser.avatarFileName) : null,
+    toAvatarUrl: toUser && toUser.avatarFileName ? buildMediaUrl("profiles", toUser.avatarFileName) : null,
     text: message.text,
     createdAt: message.createdAt,
-    mine: message.fromUserId === currentUserId
+    mine: message.fromUserId === currentUserId,
+    isSupport: Boolean(message.isSupport),
+    supportUserId: message.supportUserId || null
   };
+}
+
+function createTrackDtoContext(users, currentUserId = null) {
+  const usersById = new Map();
+  let currentUser = null;
+
+  for (const user of users) {
+    ensureUserStructure(user);
+    usersById.set(user.id, user);
+    if (currentUserId && user.id === currentUserId) {
+      currentUser = user;
+    }
+  }
+
+  const currentUserReposts = currentUser && Array.isArray(currentUser.reposts)
+    ? currentUser.reposts.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+
+  return {
+    currentUserId,
+    currentUser,
+    currentUserReposts,
+    repostMap: buildRepostMap(users),
+    usersById
+  };
+}
+
+async function listTracks(currentUser) {
+  const currentUserId = currentUser ? currentUser.id : null;
+  const [tracks, users] = await Promise.all([
+    readJson(TRACKS_FILE, []),
+    readJson(USERS_FILE, [])
+  ]);
+
+  for (const track of tracks) {
+    ensureTrackStructure(track);
+  }
+
+  const context = createTrackDtoContext(users, currentUserId);
+
+  return tracks
+    .filter((track) => canListTrack(track, currentUserId))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((track) => toTrackDto(track, context));
+}
+
+async function listPlaylists(currentUser) {
+  const currentUserId = currentUser ? currentUser.id : null;
+  const [playlists, tracks] = await Promise.all([
+    readJson(PLAYLISTS_FILE, []),
+    readJson(TRACKS_FILE, [])
+  ]);
+
+  for (const playlist of playlists) {
+    ensurePlaylistStructure(playlist);
+  }
+
+  for (const track of tracks) {
+    ensureTrackStructure(track);
+  }
+
+  const tracksById = buildTrackMap(tracks);
+  const context = { currentUserId, tracksById };
+
+  return playlists
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+    .map((playlist) => toPlaylistDto(playlist, context));
+}
+
+async function listAlbums(currentUser) {
+  const currentUserId = currentUser ? currentUser.id : null;
+  const [albums, tracks] = await Promise.all([
+    readJson(ALBUMS_FILE, []),
+    readJson(TRACKS_FILE, [])
+  ]);
+
+  for (const album of albums) {
+    ensureAlbumStructure(album);
+  }
+
+  for (const track of tracks) {
+    ensureTrackStructure(track);
+  }
+
+  const tracksById = buildTrackMap(tracks);
+  const context = { currentUserId, tracksById };
+
+  return albums
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+    .map((album) => toAlbumDto(album, context));
 }
 
 async function getUserBySessionId(sid) {
@@ -1517,6 +1973,34 @@ function broadcastOnlineCount() {
   });
 }
 
+function handleRealtimeMessage(socket, userId, message) {
+  if (typeof message !== "string") {
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(message);
+  } catch {
+    return;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return;
+  }
+
+  const event = String(payload.event || payload.type || "").trim().toLowerCase();
+  if (event === "ping" || event === "ws:ping") {
+    sendWsJson(socket, {
+      event: "ws:pong",
+      payload: {
+        userId
+      },
+      at: new Date().toISOString()
+    });
+  }
+}
+
 function rejectWebSocketUpgrade(socket, statusCode, statusText) {
   if (!socket.destroyed) {
     socket.write(`HTTP/1.1 ${statusCode} ${statusText}\r\nConnection: close\r\n\r\n`);
@@ -1607,17 +2091,17 @@ function setupWebSocketSocket(socket, userId) {
   });
 
   socket.on("end", () => {
-    removeWebSocketSocket(socket, userId);
+    unregisterWsClient(userId, socket);
   });
 
   socket.on("close", () => {
-    removeWebSocketSocket(socket, userId);
+    unregisterWsClient(userId, socket);
   });
 
   socket.on("error", () => {
-    removeWebSocketSocket(socket, userId);
+    unregisterWsClient(userId, socket);
   });
 
-  addWebSocketSocket(socket, userId);
+  registerWsClient(userId, socket);
   broadcastOnlineCount();
 }
