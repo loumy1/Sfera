@@ -78,14 +78,20 @@ These folders are intentionally ignored in git where needed, because they contai
 
 ## Project structure
 
-- [`server.js`](server.js) — server entry point
-- [`src/server/chunks`](src/server/chunks) — backend split into server chunks
+- [`server.js`](server.js) — thin production entrypoint
+- [`src/server/index.js`](src/server/index.js) — server bootstrap entry
+- [`src/server/bootstrap`](src/server/bootstrap) — runtime loading and bootstrap helpers
+- [`src/server/runtime/parts`](src/server/runtime/parts) — backend runtime parts
 - [`public/index.html`](public/index.html) — main app shell
 - [`public/item-page.html`](public/item-page.html) — release page
 - [`public/public-profile.html`](public/public-profile.html) — public profile page
-- [`public/src/app`](public/src/app) — frontend modules
-- [`public/src/app/player/player-core.js`](public/src/app/player/player-core.js) — global player logic
-- [`public/src/app/settings/settings-ui.js`](public/src/app/settings/settings-ui.js) — settings, support, admin center
+- [`public/assets/boot`](public/assets/boot) — frontend boot files
+- [`public/assets/modules`](public/assets/modules) — browser modules by domain
+- [`public/assets/pages`](public/assets/pages) — page-specific scripts
+- [`public/assets/styles`](public/assets/styles) — main stylesheet entry
+- [`public/assets/branding`](public/assets/branding) — brand assets
+
+See full structure notes in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Notes
 

@@ -1,10 +1,11 @@
 {
-  "name": "beatoon",
+  "name": "sfera",
   "version": "1.0.0",
-  "description": "beatoon — MVP музыкальной платформы в стиле SoundCloud",
-  "main": "server.js",
+  "description": "Sfera — independent music platform",
+  "main": "src/server/index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "start:server": "node server.js"
   },
   "dependencies": {
     "busboy": "^1.6.0",
