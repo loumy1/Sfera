@@ -4793,8 +4793,8 @@ body.player-overlay-open {
   min-width: 0;
 }
 
-.player-queue-text strong,
-.player-queue-text span {
+.player-queue-text > strong,
+.player-queue-text > span {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -4808,6 +4808,8 @@ body.player-overlay-open {
   gap: 0.42rem;
   flex-wrap: nowrap;
   min-width: 0;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .player-queue-text .track-title-heading .track-title-text {
